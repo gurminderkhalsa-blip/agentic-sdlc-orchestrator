@@ -219,7 +219,8 @@ public class NodeExecutor {
         WorkspaceSession session = workspace.map(w -> w.session(node.id(), attempt.getAttemptNo(), actor)).orElse(null);
         AgentContext context = new AgentContext(runId, run.getRequirement(), run.getScenario(), node,
                 attempt.getAttemptNo(), feedback, name -> artifacts.readCommitted(runId, name),
-                () -> signals.isStopRequested(runId), session, run.getRecording(), plan.fallback(), previousFiles);
+                () -> signals.isStopRequested(runId), session, run.getRecording(), plan.fallback(), previousFiles,
+                humanDecisions(runId));
 
         String failure = null;
         try {
@@ -374,6 +375,25 @@ public class NodeExecutor {
         }
         audit.record(runId, node.id(), AuditType.STAGE_SUCCEEDED, AuditService.SYSTEM, "Stage succeeded");
         return Outcome.SUCCEEDED;
+    }
+
+    /**
+     * Human decisions agents must respect: every decided approval that carries a comment, plus human edits of
+     * artifacts. Built from the approval records, so decisions made before a stage re-runs are included.
+     */
+    private List<String> humanDecisions(String runId) {
+        List<String> result = new ArrayList<>();
+        for (ApprovalRequest approval : approvals.findByRunIdOrderByIdAsc(runId)) {
+            if ((approval.getStatus() == ApprovalStatus.APPROVED || approval.getStatus() == ApprovalStatus.REJECTED)
+                    && approval.getComment() != null && !approval.getComment().isBlank()) {
+                result.add(approval.getStatus() + " " + approval.getReason() + " at " + approval.getNodeId() + " by "
+                        + approval.getDecidedBy() + ": " + approval.getComment());
+            }
+        }
+        decisions.findByRunIdOrderByIdAsc(runId).stream()
+                .filter(d -> d.getActor() != null && d.getActor().startsWith("human:") && d.getTitle().startsWith("Revised"))
+                .forEach(d -> result.add(d.getTitle() + " by " + d.getActor() + ": " + d.getRationale()));
+        return result;
     }
 
     /** Outputs of all ancestor stages, except stages that were SKIPPED and so produced nothing. */

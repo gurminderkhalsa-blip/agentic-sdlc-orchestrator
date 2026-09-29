@@ -104,12 +104,14 @@ class LlmAgentTest {
         AgentContext ctx = new AgentContext("run-1", "req", Scenario.GREENFIELD,
                 node("implement", "ImplementerAgent", List.of("change_set")), 2, List.of("A.java:1: error: ';' expected"),
                 name -> Optional.empty(), () -> false, session, "demo", false,
-                Map.of("src/main/java/A.java", "class A { int x = 1 }"));
+                Map.of("src/main/java/A.java", "class A { int x = 1 }"),
+                List.of("APPROVED POLICY at security_review by human:lead: accepted risk, deferred"));
 
         new ImplementerAgent(support, false).execute(ctx);
 
         assertThat(lastRequest.get().userPrompt()).contains("Previous attempt to repair")
-                .contains("class A { int x = 1 }").contains("';' expected");
+                .contains("class A { int x = 1 }").contains("';' expected")
+                .contains("Binding decisions made by humans").contains("accepted risk, deferred");
     }
 
     @Test

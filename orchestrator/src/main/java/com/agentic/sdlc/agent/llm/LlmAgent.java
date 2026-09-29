@@ -64,6 +64,7 @@ public abstract class LlmAgent implements Agent {
                 .section("Requirement", context.requirement())
                 .section("Scenario hint", String.valueOf(context.scenario()));
         describeTask(context, prompt);
+        prompt.humanDecisions(context);
         prompt.previousAttempt(context);
         prompt.feedback(context);
 

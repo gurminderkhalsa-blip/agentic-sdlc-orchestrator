@@ -237,6 +237,7 @@ public class WorkflowEngine {
                         Map.of("commit", published, "repository", workspaces.targetRepo().toString()));
             }
             decide(current, ApprovalStatus.APPROVED, actor, comment);
+            recordApprovalDecision(run, current, "Approved", actor, comment);
             stage.setStatus(StageStatus.SUCCEEDED);
             stage.setEndedAt(Instant.now());
             stages.save(stage);
@@ -257,6 +258,7 @@ public class WorkflowEngine {
             ApprovalRequest current = requirePending(approvalId);
             StageRun stage = stages.findById(current.getStageRunId()).orElseThrow();
             decide(current, ApprovalStatus.REJECTED, actor, comment);
+            recordApprovalDecision(load(stage.getRunId()), current, "Rejected", actor, comment);
             audit.record(stage.getRunId(), stage.getNodeId(), AuditType.APPROVAL_REJECTED, actor,
                     current.getReason() + " rejected: " + comment);
             WorkflowDefinition workflow = catalog.get(load(stage.getRunId()).getWorkflowName());
@@ -551,6 +553,16 @@ public class WorkflowEngine {
         request.setComment(comment);
         request.setDecidedAt(Instant.now());
         approvals.save(request);
+    }
+
+    /** A reviewer's comment is a decision downstream agents must respect, so it joins the decision lineage. */
+    private void recordApprovalDecision(WorkflowRun run, ApprovalRequest request, String verdict, String actor,
+            String comment) {
+        if (comment == null || comment.isBlank()) {
+            return;
+        }
+        recordHumanDecision(run, request.getNodeId(), actor,
+                verdict + " " + request.getReason() + " at " + request.getNodeId(), comment, Map.of());
     }
 
     private void recordHumanDecision(WorkflowRun run, String nodeId, String actor, String title, String rationale,

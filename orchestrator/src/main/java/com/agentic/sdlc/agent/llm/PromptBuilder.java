@@ -28,6 +28,16 @@ public class PromptBuilder {
         return this;
     }
 
+    public PromptBuilder humanDecisions(AgentContext context) {
+        if (context.humanDecisions().isEmpty()) {
+            return this;
+        }
+        return section("Binding decisions made by humans on this run",
+                "These were decided by the accountable humans and override earlier assumptions. Do not contradict "
+                        + "them; report a risk a human explicitly accepted as a risk, not as a blocking finding.\n- "
+                        + String.join("\n- ", context.humanDecisions()));
+    }
+
     public PromptBuilder feedback(AgentContext context) {
         if (!context.feedback().isEmpty()) {
             StringBuilder body = new StringBuilder("Earlier attempts at this stage were rejected. Fix every problem below; "

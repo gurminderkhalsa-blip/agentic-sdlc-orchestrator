@@ -42,6 +42,9 @@ class GovernanceTest extends EngineTestSupport {
         engine.approve(approval.getId(), "human:lead", "looks right");
         await(runId);
 
+        assertThat(agents.get("Planner").calls().get(0).humanDecisions()).singleElement().asString()
+                .contains("APPROVED STAGE_CHECKPOINT at requirements by human:lead: looks right");
+
         assertThat(runStatus(runId)).isEqualTo(RunStatus.SUCCEEDED);
         assertThatThrownBy(() -> engine.approve(approval.getId(), "human:lead", null))
                 .isInstanceOf(ConflictException.class);
@@ -57,6 +60,8 @@ class GovernanceTest extends EngineTestSupport {
 
         assertThat(agents.get("Spec").calls()).hasSize(2);
         assertThat(agents.get("Spec").calls().get(1).feedback()).containsExactly("Human reviewer: add rate limiting");
+        assertThat(agents.get("Spec").calls().get(1).humanDecisions()).singleElement().asString()
+                .contains("REJECTED STAGE_CHECKPOINT at requirements by human:lead: add rate limiting");
         assertThat(runStatus(runId)).isEqualTo(RunStatus.AWAITING_APPROVAL);
         assertThat(auditCount(runId, AuditType.ROLLBACK)).isEqualTo(1);
     }

@@ -30,6 +30,7 @@ public class AgentContext {
     private final String recording;
     private final boolean fallback;
     private final Map<String, String> previousAttemptFiles;
+    private final List<String> humanDecisions;
 
     private final Map<String, String> staged = new LinkedHashMap<>();
     private final List<ProposedDecision> decisions = new java.util.ArrayList<>();
@@ -39,12 +40,13 @@ public class AgentContext {
             List<String> feedback, Function<String, Optional<String>> committedReader, BooleanSupplier stopRequested,
             WorkspaceSession workspace, String recording, boolean fallback) {
         this(runId, requirement, scenario, node, attemptNo, feedback, committedReader, stopRequested, workspace,
-                recording, fallback, Map.of());
+                recording, fallback, Map.of(), List.of());
     }
 
     public AgentContext(String runId, String requirement, Scenario scenario, NodeDefinition node, int attemptNo,
             List<String> feedback, Function<String, Optional<String>> committedReader, BooleanSupplier stopRequested,
-            WorkspaceSession workspace, String recording, boolean fallback, Map<String, String> previousAttemptFiles) {
+            WorkspaceSession workspace, String recording, boolean fallback, Map<String, String> previousAttemptFiles,
+            List<String> humanDecisions) {
         this.runId = runId;
         this.requirement = requirement;
         this.scenario = scenario;
@@ -57,6 +59,12 @@ public class AgentContext {
         this.recording = recording;
         this.fallback = fallback;
         this.previousAttemptFiles = Map.copyOf(previousAttemptFiles);
+        this.humanDecisions = List.copyOf(humanDecisions);
+    }
+
+    /** Decisions humans made on this run so far (approval comments, revisions), oldest first. Binding for agents. */
+    public List<String> humanDecisions() {
+        return humanDecisions;
     }
 
     /**

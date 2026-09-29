@@ -80,6 +80,23 @@ class WorkspaceWorkflowTest extends EngineTestSupport {
     }
 
     @Test
+    void repairContextSurvivesARerunOfTheStage() throws Exception {
+        agents.get("Worker").script(ctx -> {
+            ctx.workspace().orElseThrow().write("src/main/java/demo/Draft.java", "class Draft { /* attempt " + ctx.attemptNo() + " */ }");
+            return AgentResult.failed("not good enough");
+        });
+        String runId = startAndWait("coded", Scenario.GREENFIELD);
+        assertThat(stageStatus(runId, "build")).isEqualTo(StageStatus.FAILED);
+
+        agents.get("Worker").script(ScriptedAgent::writeDefaults);
+        engine.rerunStage(runId, "build", "human:lead", null);
+        await(runId);
+
+        assertThat(agents.get("Worker").calls().get(3).previousAttemptFiles())
+                .containsEntry("src/main/java/demo/Draft.java", "class Draft { /* attempt 3 */ }");
+    }
+
+    @Test
     void agentFailureRollsBackItsFiles() throws Exception {
         agents.get("Worker").script(ctx -> {
             ctx.workspace().orElseThrow().write("src/main/java/demo/Half.java", "class Half {");

@@ -32,6 +32,11 @@ public class ArtifactStore {
         return artifacts.findFirstByRunIdAndNameAndStatusOrderByVersionDesc(runId, name, ArtifactStatus.COMMITTED);
     }
 
+    /** Latest version with the given status, e.g. the last DISCARDED proposal of a stage. */
+    public Optional<Artifact> latest(String runId, String name, ArtifactStatus status) {
+        return artifacts.findFirstByRunIdAndNameAndStatusOrderByVersionDesc(runId, name, status);
+    }
+
     /** Current hash of each named artifact; missing artifacts are left out. */
     public Map<String, String> committedHashes(String runId, List<String> names) {
         Map<String, String> hashes = new LinkedHashMap<>();

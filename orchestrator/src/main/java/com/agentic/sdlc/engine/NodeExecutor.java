@@ -36,6 +36,7 @@ import com.agentic.sdlc.state.ApprovalReason;
 import com.agentic.sdlc.state.ApprovalRequest;
 import com.agentic.sdlc.state.ApprovalRequestRepository;
 import com.agentic.sdlc.state.ApprovalStatus;
+import com.agentic.sdlc.state.ArtifactStatus;
 import com.agentic.sdlc.state.AttemptStatus;
 import com.agentic.sdlc.state.Decision;
 import com.agentic.sdlc.state.DecisionRepository;
@@ -162,7 +163,7 @@ public class NodeExecutor {
         }
 
         String lastFailure = null;
-        Map<String, String> previousFiles = Map.of();
+        Map<String, String> previousFiles = lastProposal(runId, nodeId);
         for (AgentPlan plan : plansFor(node)) {
             if (plan.fallback()) {
                 audit.record(runId, nodeId, AuditType.FALLBACK_ACTIVATED, AuditService.SYSTEM,
@@ -276,7 +277,11 @@ public class NodeExecutor {
                 session.changes().stream().filter(c -> !c.isDelete()).forEach(c -> proposed.put(c.path(), c.content()));
             }
             rollbackFiles(runId, node.id(), session, attempt.getAttemptNo());
-            artifacts.discard(runId, node.id(), stage.getId(), attempt.getId(), actor, staged);
+            Map<String, String> discarded = new LinkedHashMap<>(staged);
+            if (!proposed.isEmpty()) {
+                discarded.put(proposalArtifact(node.id()), json.writeValueAsString(proposed));
+            }
+            artifacts.discard(runId, node.id(), stage.getId(), attempt.getId(), actor, discarded);
             finishAttempt(attempt, AttemptStatus.FAILED, failure, context.tokensUsed());
             audit.record(runId, node.id(), AuditType.ATTEMPT_FAILED, actor,
                     "Attempt " + attempt.getAttemptNo() + " failed: " + failure);
@@ -394,6 +399,24 @@ public class NodeExecutor {
                 .filter(d -> d.getActor() != null && d.getActor().startsWith("human:") && d.getTitle().startsWith("Revised"))
                 .forEach(d -> result.add(d.getTitle() + " by " + d.getActor() + ": " + d.getRationale()));
         return result;
+    }
+
+    /**
+     * Files of the stage's last rejected attempt, kept as a DISCARDED artifact so repair mode also works when
+     * the stage is re-run later (for example after its upstream stage was sent back).
+     */
+    private Map<String, String> lastProposal(String runId, String nodeId) {
+        return artifacts.latest(runId, proposalArtifact(nodeId), ArtifactStatus.DISCARDED)
+                .map(a -> {
+                    Map<String, String> files = new LinkedHashMap<>();
+                    json.readTree(a.getContent()).properties().forEach(e -> files.put(e.getKey(), e.getValue().asString()));
+                    return files;
+                })
+                .orElse(Map.of());
+    }
+
+    static String proposalArtifact(String nodeId) {
+        return nodeId + "_last_proposal";
     }
 
     /** Outputs of all ancestor stages, except stages that were SKIPPED and so produced nothing. */

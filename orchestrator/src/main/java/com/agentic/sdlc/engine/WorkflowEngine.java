@@ -375,7 +375,9 @@ public class WorkflowEngine {
             return;
         }
         workspaces.find(runId).ifPresent(ws -> {
-            Map<String, String> files = ws.stageFiles(stage.getNodeId(), load(runId).getBaselineCommit());
+            // Merge over the existing repair base: a fragmentary last attempt must not replace a fuller version.
+            Map<String, String> files = new java.util.LinkedHashMap<>(executor.lastProposal(runId, stage.getNodeId()));
+            files.putAll(ws.stageFiles(stage.getNodeId(), load(runId).getBaselineCommit()));
             if (!files.isEmpty()) {
                 artifacts.discard(runId, stage.getNodeId(), stage.getId(), null, AuditService.SYSTEM,
                         Map.of(NodeExecutor.proposalArtifact(stage.getNodeId()), json.writeValueAsString(files)));

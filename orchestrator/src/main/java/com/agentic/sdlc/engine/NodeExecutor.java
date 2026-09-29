@@ -222,6 +222,9 @@ public class NodeExecutor {
         attempts.save(attempt);
 
         WorkspaceSession session = workspace.map(w -> w.session(node.id(), attempt.getAttemptNo(), actor)).orElse(null);
+        if (session != null && !previousFiles.isEmpty()) {
+            restoreRepairBase(session, node, previousFiles);
+        }
         AgentContext context = new AgentContext(runId, run.getRequirement(), run.getScenario(), node,
                 attempt.getAttemptNo(), feedback, name -> artifacts.readCommitted(runId, name),
                 () -> signals.isStopRequested(runId), session, run.getRecording(), plan.fallback(), previousFiles,
@@ -411,7 +414,7 @@ public class NodeExecutor {
      * Files of the stage's last rejected attempt, kept as a DISCARDED artifact so repair mode also works when
      * the stage is re-run later (for example after its upstream stage was sent back).
      */
-    private Map<String, String> lastProposal(String runId, String nodeId) {
+    Map<String, String> lastProposal(String runId, String nodeId) {
         return artifacts.latest(runId, proposalArtifact(nodeId), ArtifactStatus.DISCARDED)
                 .map(a -> {
                     Map<String, String> files = new LinkedHashMap<>();
@@ -419,6 +422,25 @@ public class NodeExecutor {
                     return files;
                 })
                 .orElse(Map.of());
+    }
+
+    /**
+     * Repair starts from the previous version in the working tree, not just in the prompt: an agent that
+     * returns only the files it fixes must not silently drop the rest of the change. Only paths inside the
+     * stage's write scope are restored.
+     */
+    private static void restoreRepairBase(WorkspaceSession session, NodeDefinition node, Map<String, String> files) {
+        List<java.nio.file.PathMatcher> scope = node.writes().stream()
+                .map(glob -> java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + glob)).toList();
+        files.forEach((path, content) -> {
+            if (scope.stream().anyMatch(m -> m.matches(java.nio.file.Path.of(path)))) {
+                try {
+                    session.write(path, content);
+                } catch (com.agentic.sdlc.workspace.WorkspaceAccessException ignored) {
+                    // protected path; never part of a valid repair base
+                }
+            }
+        });
     }
 
     static String proposalArtifact(String nodeId) {

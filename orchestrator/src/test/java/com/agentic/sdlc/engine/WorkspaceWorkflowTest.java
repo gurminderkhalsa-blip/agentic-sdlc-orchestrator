@@ -118,6 +118,28 @@ class WorkspaceWorkflowTest extends EngineTestSupport {
     }
 
     @Test
+    void reworkKeepsFilesTheAgentDidNotReturnAgain() throws Exception {
+        agents.get("Worker").script(ctx -> {
+            var ws = ctx.workspace().orElseThrow();
+            if (ctx.feedback().isEmpty()) {
+                ws.write("src/main/java/demo/Feature.java", "class Feature {}");
+                ws.write("src/main/java/demo/Query.java", "class Query { String sql = \"local\"; }");
+            } else {
+                ws.write("src/main/java/demo/Query.java", "class Query { String sql = \"utc\"; }");
+            }
+            return ScriptedAgent.writeDefaults(ctx);
+        });
+        String runId = startAndWait("coded", Scenario.GREENFIELD);
+
+        engine.rerunStage(runId, "build", "human:lead", "group by UTC");
+        await(runId);
+
+        Workspace ws = workspaces.find(runId).orElseThrow();
+        assertThat(ws.readAtHead("src/main/java/demo/Query.java").orElseThrow()).contains("utc");
+        assertThat(ws.readAtHead("src/main/java/demo/Feature.java")).hasValue("class Feature {}");
+    }
+
+    @Test
     void agentFailureRollsBackItsFiles() throws Exception {
         agents.get("Worker").script(ctx -> {
             ctx.workspace().orElseThrow().write("src/main/java/demo/Half.java", "class Half {");

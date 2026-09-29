@@ -56,10 +56,10 @@ public class PromptBuilder {
         if (context.previousAttemptFiles().isEmpty()) {
             return this;
         }
-        StringBuilder body = new StringBuilder("Your previous attempt wrote the files below and was rejected for the "
-                + "reasons under \"Feedback you must address\". Start from these files: make the smallest edits that "
-                + "fix every reported problem, keep everything that already worked, and return the complete "
-                + "corrected files.\n");
+        StringBuilder body = new StringBuilder("The previous version of your change (below) was rejected for the "
+                + "reasons under \"Feedback you must address\". These files are already restored in the workspace. "
+                + "Make the smallest edits that fix every reported problem and keep everything that already worked. "
+                + "Return, in full, only the files you change; files you do not return stay exactly as shown.\n");
         context.previousAttemptFiles().forEach((path, content) ->
                 body.append("\n### ").append(path).append("\n```\n").append(content).append("\n```\n"));
         return section("Previous attempt to repair", body.toString());

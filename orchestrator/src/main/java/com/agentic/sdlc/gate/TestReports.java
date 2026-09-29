@@ -46,6 +46,7 @@ final class TestReports {
                     }
                     if (problem != null && failing.size() < 15) {
                         String detail = problem.getTextContent().lines().limit(6)
+                                .map(line -> line.length() > 300 ? line.substring(0, 300) + " ..." : line)
                                 .reduce((a, b) -> a + "\n    " + b).orElse("");
                         failing.add(testCase.getAttribute("classname") + "." + testCase.getAttribute("name")
                                 + ": " + detail);

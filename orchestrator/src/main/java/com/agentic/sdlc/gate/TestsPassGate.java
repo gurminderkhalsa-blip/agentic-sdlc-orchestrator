@@ -28,6 +28,11 @@ public class TestsPassGate implements Gate {
 
     @Override
     public GateResult check(GateContext context) {
+        return runTests(context, 2);
+    }
+
+    /** Runs the whole suite; {@code minTests} guards against a stage "passing" by writing no tests. */
+    static GateResult runTests(GateContext context, int minTests) {
         Workspace workspace = context.workspace().orElse(null);
         if (workspace == null) {
             return GateResult.fail("no workspace to test");
@@ -56,7 +61,7 @@ public class TestsPassGate implements Gate {
             return GateResult.fail(summary.failures() + summary.errors() + " of " + summary.tests()
                     + " tests failed:\n" + String.join("\n", summary.failing())).withEvidence(evidence);
         }
-        if (summary.tests() < 2) {
+        if (summary.tests() < minTests) {
             return GateResult.fail("Only " + summary.tests() + " test(s) ran; add tests for the new behaviour")
                     .withEvidence(evidence);
         }

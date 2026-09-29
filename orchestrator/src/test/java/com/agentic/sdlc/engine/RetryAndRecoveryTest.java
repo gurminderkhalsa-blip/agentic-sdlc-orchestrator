@@ -52,6 +52,18 @@ class RetryAndRecoveryTest extends EngineTestSupport {
     }
 
     @Test
+    void hugeFailureMessagesAreTruncatedInsteadOfCrashingTheStage() throws Exception {
+        String huge = "x".repeat(50_000);
+        agents.get("Worker").script(ctx -> ctx.attemptNo() == 1 ? AgentResult.failed(huge) : ScriptedAgent.writeDefaults(ctx));
+
+        String runId = startAndWait("retry", Scenario.GREENFIELD);
+
+        assertThat(runStatus(runId)).isEqualTo(RunStatus.SUCCEEDED);
+        assertThat(agents.get("Worker").calls().get(1).feedback().get(0)).hasSizeLessThanOrEqualTo(12_000)
+                .contains("more characters truncated");
+    }
+
+    @Test
     void agentExceptionsAreRetriedLikeFailures() throws Exception {
         agents.get("Worker").script(ctx -> {
             if (ctx.attemptNo() == 1) {

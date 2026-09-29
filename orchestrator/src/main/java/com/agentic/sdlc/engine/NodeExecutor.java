@@ -22,6 +22,7 @@ import com.agentic.sdlc.agent.ProposedDecision;
 import com.agentic.sdlc.agent.RunStoppedException;
 import com.agentic.sdlc.audit.AuditService;
 import com.agentic.sdlc.audit.AuditType;
+import com.agentic.sdlc.common.Text;
 import com.agentic.sdlc.config.SdlcProperties;
 import com.agentic.sdlc.gate.GateContext;
 import com.agentic.sdlc.gate.GateRegistry;
@@ -63,6 +64,11 @@ import tools.jackson.databind.ObjectMapper;
 public class NodeExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(NodeExecutor.class);
+
+    /** Longest single failure passed back to an agent; enough for ~15 test failures or ~25 compiler errors. */
+    static final int FEEDBACK_CHARS = 12_000;
+    /** Matches the 4000-character columns on StageRun.lastError and StageAttempt.failureReason. */
+    static final int STORED_REASON_CHARS = 4000;
 
     /** How a stage execution ended. The engine decides what happens to the run next. */
     public enum Outcome {
@@ -180,7 +186,7 @@ public class NodeExecutor {
                 if (attempt.outcome() != Outcome.FAILED) {
                     return new Result(attempt.outcome(), attempt.failure());
                 }
-                lastFailure = attempt.failure();
+                lastFailure = Text.truncate(attempt.failure(), FEEDBACK_CHARS);
                 if (!attempt.proposedFiles().isEmpty()) {
                     previousFiles = attempt.proposedFiles();
                 }
@@ -407,7 +413,7 @@ public class NodeExecutor {
 
     private Result fail(StageRun stage, String reason) {
         stage.setStatus(StageStatus.FAILED);
-        stage.setLastError(reason);
+        stage.setLastError(Text.truncate(reason, STORED_REASON_CHARS));
         stage.setEndedAt(Instant.now());
         stages.save(stage);
         audit.record(stage.getRunId(), stage.getNodeId(), AuditType.STAGE_FAILED, AuditService.SYSTEM,
@@ -424,7 +430,7 @@ public class NodeExecutor {
 
     private void finishAttempt(StageAttempt attempt, AttemptStatus status, String failure, long tokens) {
         attempt.setStatus(status);
-        attempt.setFailureReason(failure);
+        attempt.setFailureReason(Text.truncate(failure, STORED_REASON_CHARS));
         attempt.setTokensUsed(tokens);
         attempt.setEndedAt(Instant.now());
         attempts.save(attempt);

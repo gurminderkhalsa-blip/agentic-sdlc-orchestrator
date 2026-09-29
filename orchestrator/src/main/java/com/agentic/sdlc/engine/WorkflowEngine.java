@@ -27,6 +27,7 @@ import com.agentic.sdlc.audit.AuditType;
 import com.agentic.sdlc.common.ConflictException;
 import com.agentic.sdlc.common.Hashing;
 import com.agentic.sdlc.common.NotFoundException;
+import com.agentic.sdlc.common.Text;
 import com.agentic.sdlc.condition.ConditionContext;
 import com.agentic.sdlc.condition.ConditionRegistry;
 import com.agentic.sdlc.state.ApprovalRequest;
@@ -430,9 +431,17 @@ public class WorkflowEngine {
             withLock(runId, () -> {
                 StageRun stage = stage(runId, nodeId);
                 stage.setStatus(StageStatus.FAILED);
-                stage.setLastError("Orchestrator error: " + error.getMessage());
+                stage.setLastError(Text.truncate("Orchestrator error: " + error.getMessage(), 4000));
                 stage.setEndedAt(Instant.now());
                 stages.save(stage);
+                attempts.findByRunIdOrderByIdAsc(runId).stream()
+                        .filter(a -> a.getStageRunId().equals(stage.getId()) && a.getStatus() == AttemptStatus.RUNNING)
+                        .forEach(a -> {
+                            a.setStatus(AttemptStatus.ABORTED);
+                            a.setFailureReason("orchestrator error");
+                            a.setEndedAt(Instant.now());
+                            attempts.save(a);
+                        });
                 audit.record(runId, nodeId, AuditType.STAGE_FAILED, AuditService.SYSTEM,
                         "Stage crashed: " + error.getMessage());
                 return null;

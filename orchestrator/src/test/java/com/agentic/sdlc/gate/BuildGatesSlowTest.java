@@ -72,6 +72,7 @@ class BuildGatesSlowTest {
         assertThat(failing.outcome()).isEqualTo(GateResult.Outcome.FAIL);
         assertThat(failing.message()).contains("BrokenTest.doubles");
         assertThat(failing.evidence()).containsEntry("failures", 1);
+        assertThat(new ExistingTestsPassGate().check(ctx).outcome()).isEqualTo(GateResult.Outcome.FAIL);
 
         session.write("src/test/java/com/example/shortener/BrokenTest.java", """
                 package com.example.shortener;
@@ -83,6 +84,7 @@ class BuildGatesSlowTest {
         GateResult passing = new TestsPassGate().check(ctx);
         assertThat(passing.outcome()).as(passing.message()).isEqualTo(GateResult.Outcome.PASS);
         assertThat(passing.evidence()).containsEntry("tests", 2);
+        assertThat(new ExistingTestsPassGate().check(ctx).outcome()).isEqualTo(GateResult.Outcome.PASS);
 
         GateResult coverage = new CoverageGate(TestProperties.defaults()).check(ctx);
         assertThat(coverage.evidence()).containsKey("lineCoverage");

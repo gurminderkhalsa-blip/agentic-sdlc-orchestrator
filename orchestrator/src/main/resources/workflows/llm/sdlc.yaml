@@ -48,7 +48,9 @@ nodes:
     outputs: [change_set]
     writes: ["src/main/**", "build.gradle"]
     entryGates: [inputsAvailable]
-    exitGates: [artifactsPresent, compiles]
+    # existingTestsPass: the tests already on the branch still pass, so the change is not a regression
+    # and the application context still starts.
+    exitGates: [artifactsPresent, compiles, existingTestsPass]
     maxRetries: 3
     fallbackAgent: ImplementerFallbackAgent
     fallbackAttempts: 2

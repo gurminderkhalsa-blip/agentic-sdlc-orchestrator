@@ -70,6 +70,8 @@ public class NodeExecutor {
     static final int FEEDBACK_CHARS = 12_000;
     /** Matches the 4000-character columns on StageRun.lastError and StageAttempt.failureReason. */
     static final int STORED_REASON_CHARS = 4000;
+    /** Identical consecutive failures after which retrying is pointless and a human should look. */
+    static final int IDENTICAL_FAILURES_LIMIT = 3;
 
     /** How a stage execution ended. The engine decides what happens to the run next. */
     public enum Outcome {
@@ -163,6 +165,8 @@ public class NodeExecutor {
         }
 
         String lastFailure = null;
+        int identicalFailures = 0;
+        boolean circuitBroken = false;
         Map<String, String> previousFiles = lastProposal(runId, nodeId);
         for (AgentPlan plan : plansFor(node)) {
             if (plan.fallback()) {
@@ -187,7 +191,9 @@ public class NodeExecutor {
                 if (attempt.outcome() != Outcome.FAILED) {
                     return new Result(attempt.outcome(), attempt.failure());
                 }
-                lastFailure = Text.truncate(attempt.failure(), FEEDBACK_CHARS);
+                String failure = Text.truncate(attempt.failure(), FEEDBACK_CHARS);
+                identicalFailures = failure.equals(lastFailure) ? identicalFailures + 1 : 1;
+                lastFailure = failure;
                 if (!attempt.proposedFiles().isEmpty()) {
                     // Merge, don't replace: an attempt that edited only some files must not make the next
                     // attempt forget the rest of the version it is repairing.
@@ -195,10 +201,24 @@ public class NodeExecutor {
                     merged.putAll(attempt.proposedFiles());
                     previousFiles = merged;
                 }
+                if (identicalFailures > 1) {
+                    feedback.add("This is exactly the same failure as your previous attempt: your change did not fix it. "
+                            + "Read the error and any 'Known fix' line again and change the failing line itself.");
+                }
                 feedback.add(lastFailure);
+                if (identicalFailures >= IDENTICAL_FAILURES_LIMIT) {
+                    // Circuit breaker: more of the same will not help; hand over to the fallback or a human.
+                    circuitBroken = true;
+                    identicalFailures = 0;
+                    audit.record(runId, nodeId, AuditType.CIRCUIT_BREAKER, AuditService.SYSTEM,
+                            "Same failure " + IDENTICAL_FAILURES_LIMIT + " times in a row with " + plan.agent()
+                                    + "; stopping its retries");
+                    break;
+                }
             }
         }
-        return fail(stage, "All attempts exhausted. Last failure: " + lastFailure);
+        return fail(stage, (circuitBroken ? "Circuit breaker: the same failure kept repeating. "
+                : "All attempts exhausted. ") + "Last failure: " + lastFailure);
     }
 
     private AttemptOutcome runAttempt(WorkflowRun run, WorkflowDefinition workflow, NodeDefinition node,

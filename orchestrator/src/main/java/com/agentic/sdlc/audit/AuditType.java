@@ -29,6 +29,7 @@ public final class AuditType {
     public static final String CHECKPOINT = "CHECKPOINT";
     public static final String WORKSPACE_PREPARED = "WORKSPACE_PREPARED";
     public static final String RELEASE_PUBLISHED = "RELEASE_PUBLISHED";
+    public static final String CIRCUIT_BREAKER = "CIRCUIT_BREAKER";
 
     private AuditType() {
     }

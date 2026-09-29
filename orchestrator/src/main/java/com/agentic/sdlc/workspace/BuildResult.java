@@ -40,7 +40,9 @@ public record BuildResult(List<String> tasks, int exitCode, boolean timedOut, lo
             return "build timed out after " + durationMs / 1000 + "s";
         }
         String errors = compileErrors(25);
-        return errors.isBlank() ? tail(40) : "Compilation errors:\n" + errors;
+        String summary = errors.isBlank() ? tail(40) : "Compilation errors:\n" + errors;
+        List<String> hints = BuildHints.forOutput(output);
+        return hints.isEmpty() ? summary : summary + "\nKnown fix: " + String.join("\nKnown fix: ", hints);
     }
 
     /** "/abs/path/to/workspace/src/X.java:3: error" -> "src/X.java:3: error", keeping indentation. */

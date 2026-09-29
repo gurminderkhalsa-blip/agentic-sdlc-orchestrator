@@ -64,6 +64,19 @@ class RetryAndRecoveryTest extends EngineTestSupport {
     }
 
     @Test
+    void circuitBreakerStopsRepeatingIdenticalFailuresAndHandsOverToFallback() throws Exception {
+        agents.get("Worker").script(ctx -> AgentResult.failed("same compile error"));
+        agents.get("Backup").script(ScriptedAgent::writeDefaults);
+
+        String runId = startAndWait("retry", Scenario.GREENFIELD);
+
+        assertThat(runStatus(runId)).isEqualTo(RunStatus.SUCCEEDED);
+        assertThat(agents.get("Worker").calls()).hasSize(3);
+        assertThat(agents.get("Worker").calls().get(2).feedback()).anySatisfy(f -> assertThat(f).contains("exactly the same failure"));
+        assertThat(auditCount(runId, AuditType.CIRCUIT_BREAKER)).isEqualTo(1);
+    }
+
+    @Test
     void agentExceptionsAreRetriedLikeFailures() throws Exception {
         agents.get("Worker").script(ctx -> {
             if (ctx.attemptNo() == 1) {
@@ -87,7 +100,7 @@ class RetryAndRecoveryTest extends EngineTestSupport {
         assertThat(runStatus(runId)).isEqualTo(RunStatus.SUCCEEDED);
         assertThat(agents.get("Worker").calls()).hasSize(3); // 1 + maxRetries(2)
         assertThat(agents.get("Backup").calls()).hasSize(1);
-        assertThat(agents.get("Backup").calls().get(0).feedback()).hasSize(3);
+        assertThat(agents.get("Backup").calls().get(0).feedback()).filteredOn(f -> f.startsWith("Agent reported failure")).hasSize(3);
         assertThat(auditCount(runId, AuditType.FALLBACK_ACTIVATED)).isEqualTo(1);
     }
 
@@ -103,7 +116,7 @@ class RetryAndRecoveryTest extends EngineTestSupport {
 
         assertThat(runStatus(runId)).isEqualTo(RunStatus.FAILED);
         assertThat(stageStatus(runId, "build")).isEqualTo(StageStatus.FAILED);
-        assertThat(stage(runId, "build").getLastError()).contains("All attempts exhausted");
+        assertThat(stage(runId, "build").getLastError()).contains("Circuit breaker").contains("dependency down");
         assertThat(auditCount(runId, AuditType.STAGE_FAILED)).isEqualTo(1);
 
         fixed.set(true);

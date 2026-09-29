@@ -60,7 +60,8 @@ nodes:
     dependsOn: [implement]
     outputs: [test_report]
     writes: ["src/test/**"]
-    exitGates: [artifactsPresent, testsPass, coverage]
+    # acceptanceCriteriaCovered runs first: it is cheap and needs no build.
+    exitGates: [artifactsPresent, acceptanceCriteriaCovered, testsPass, coverage]
     maxRetries: 3
 
   - id: docs

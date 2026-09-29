@@ -347,7 +347,8 @@ public class WorkflowEngine {
     private void withdrawStage(String runId, WorkflowDefinition workflow, StageRun stage, String scope) {
         int withdrawn = artifacts.supersedeStageOutputs(runId, stage.getNodeId());
         List<String> reverted = workflow.usesWorkspace()
-                ? workspaces.find(runId).map(ws -> ws.revertStage(stage.getNodeId())).orElse(List.of())
+                ? workspaces.find(runId).map(ws -> ws.revertStage(stage.getNodeId(), load(runId).getBaselineCommit()))
+                        .orElse(List.of())
                 : List.of();
         if (withdrawn > 0 || !reverted.isEmpty()) {
             audit.record(runId, stage.getNodeId(), AuditType.ROLLBACK, AuditService.SYSTEM,

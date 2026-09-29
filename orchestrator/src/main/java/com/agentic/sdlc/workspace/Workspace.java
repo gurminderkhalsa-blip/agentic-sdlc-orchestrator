@@ -10,6 +10,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -22,6 +25,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.RevertCommand;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.diff.EditList;
 import org.eclipse.jgit.diff.HistogramDiff;
@@ -32,6 +36,7 @@ import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.util.io.DisabledOutputStream;
 
 /**
  * One run's private git working copy of the target repository, on its own branch. Every successful stage
@@ -253,6 +258,57 @@ public class Workspace {
         }
         gitLock.lock();
         try {
+            List<RevCommit> stageCommits = activeStageCommits(nodeId, baselineCommit);
+            List<String> reverted = new ArrayList<>();
+            for (RevCommit commit : stageCommits) {
+                RevertCommand revert = git.revert().include(commit);
+                RevCommit result = revert.call();
+                if (result == null) {
+                    throw new IllegalStateException("Could not revert " + commit.name() + " cleanly: "
+                            + revert.getFailingResult());
+                }
+                reverted.add(commit.name());
+            }
+            return reverted;
+        } catch (GitAPIException e) {
+            throw new IllegalStateException("git revert failed: " + e.getMessage(), e);
+        } finally {
+            gitLock.unlock();
+        }
+    }
+
+    /**
+     * Current content of every file the stage's (non-reverted) checkpoints in this run touched. Captured before
+     * a stage is sent back, so the rework starts from the previous version instead of from scratch.
+     */
+    public Map<String, String> stageFiles(String nodeId, String baselineCommit) {
+        Set<String> paths = new LinkedHashSet<>();
+        gitLock.lock();
+        try (RevWalk walk = new RevWalk(git.getRepository());
+                DiffFormatter diffs = new DiffFormatter(DisabledOutputStream.INSTANCE)) {
+            diffs.setRepository(git.getRepository());
+            for (RevCommit commit : activeStageCommits(nodeId, baselineCommit)) {
+                RevCommit parsed = walk.parseCommit(commit);
+                RevCommit parent = walk.parseCommit(parsed.getParent(0));
+                for (DiffEntry entry : diffs.scan(parent.getTree(), parsed.getTree())) {
+                    paths.add(entry.getChangeType() == DiffEntry.ChangeType.DELETE ? entry.getOldPath() : entry.getNewPath());
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } finally {
+            gitLock.unlock();
+        }
+        Map<String, String> files = new LinkedHashMap<>();
+        for (String path : paths) {
+            read(path).ifPresent(content -> files.put(path, content));
+        }
+        return files;
+    }
+
+    /** Stage checkpoint commits after the baseline that have not been reverted, newest first. */
+    private List<RevCommit> activeStageCommits(String nodeId, String baselineCommit) {
+        try {
             Set<String> alreadyReverted = new HashSet<>();
             List<RevCommit> stageCommits = new ArrayList<>();
             ObjectId since = git.getRepository().resolve(baselineCommit);
@@ -265,26 +321,12 @@ public class Workspace {
                     stageCommits.add(commit);
                 }
             }
-            List<String> reverted = new ArrayList<>();
-            for (RevCommit commit : stageCommits) {
-                if (alreadyReverted.contains(commit.name())) {
-                    continue;
-                }
-                RevertCommand revert = git.revert().include(commit);
-                RevCommit result = revert.call();
-                if (result == null) {
-                    throw new IllegalStateException("Could not revert " + commit.name() + " cleanly: "
-                            + revert.getFailingResult());
-                }
-                reverted.add(commit.name());
-            }
-            return reverted;
+            stageCommits.removeIf(c -> alreadyReverted.contains(c.name()));
+            return stageCommits;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (GitAPIException e) {
-            throw new IllegalStateException("git revert failed: " + e.getMessage(), e);
-        } finally {
-            gitLock.unlock();
+            throw new IllegalStateException(e);
         }
     }
 

@@ -51,6 +51,8 @@ import com.agentic.sdlc.workflow.WorkflowDefinition;
 import com.agentic.sdlc.workspace.Workspace;
 import com.agentic.sdlc.workspace.WorkspaceService;
 
+import tools.jackson.databind.ObjectMapper;
+
 /**
  * The scheduler and the only writer of run-level state. Every state transition happens inside a per-run
  * lock; stages execute outside the lock on virtual threads and call {@link #advance} when they finish.
@@ -77,6 +79,7 @@ public class WorkflowEngine {
     private final AuditService audit;
     private final ExecutorService stageExecutor;
     private final WorkspaceService workspaces;
+    private final ObjectMapper json;
 
     private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> inFlight = new ConcurrentHashMap<>();
@@ -85,7 +88,7 @@ public class WorkflowEngine {
             StageAttemptRepository attempts, ApprovalRequestRepository approvals, DecisionRepository decisions,
             ArtifactStore artifacts, ConditionRegistry conditions, NodeExecutor executor, RunSignals signals,
             AuditService audit, @Qualifier("stageExecutor") ExecutorService stageExecutor,
-            WorkspaceService workspaces) {
+            WorkspaceService workspaces, ObjectMapper json) {
         this.catalog = catalog;
         this.runs = runs;
         this.stages = stages;
@@ -99,6 +102,7 @@ public class WorkflowEngine {
         this.audit = audit;
         this.stageExecutor = stageExecutor;
         this.workspaces = workspaces;
+        this.json = json;
     }
 
     // ---------------------------------------------------------------- run lifecycle
@@ -348,6 +352,7 @@ public class WorkflowEngine {
 
     /** Withdraws a stage's committed artifacts and reverts its git checkpoints. */
     private void withdrawStage(String runId, WorkflowDefinition workflow, StageRun stage, String scope) {
+        preserveStageFiles(runId, workflow, stage);
         int withdrawn = artifacts.supersedeStageOutputs(runId, stage.getNodeId());
         List<String> reverted = workflow.usesWorkspace()
                 ? workspaces.find(runId).map(ws -> ws.revertStage(stage.getNodeId(), load(runId).getBaselineCommit()))
@@ -359,6 +364,23 @@ public class WorkflowEngine {
                             + reverted.size() + " checkpoint commit(s)"),
                     Map.of("scope", scope, "revertedCommits", reverted));
         }
+    }
+
+    /**
+     * Before a code stage is reverted, keep its files as the stage's last proposal: the rework then repairs
+     * the previous version with the new feedback instead of regenerating it and dropping earlier fixes.
+     */
+    private void preserveStageFiles(String runId, WorkflowDefinition workflow, StageRun stage) {
+        if (!workflow.usesWorkspace() || workflow.node(stage.getNodeId()).writes().isEmpty()) {
+            return;
+        }
+        workspaces.find(runId).ifPresent(ws -> {
+            Map<String, String> files = ws.stageFiles(stage.getNodeId(), load(runId).getBaselineCommit());
+            if (!files.isEmpty()) {
+                artifacts.discard(runId, stage.getNodeId(), stage.getId(), null, AuditService.SYSTEM,
+                        Map.of(NodeExecutor.proposalArtifact(stage.getNodeId()), json.writeValueAsString(files)));
+            }
+        });
     }
 
     private void requireNotRunning(String runId, WorkflowDefinition workflow, String nodeId) {

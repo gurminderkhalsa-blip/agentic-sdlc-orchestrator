@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: agentic-sdlc-orchestrator
+  profiles:
+    # stub = canned agents, no API key, no code workspace. llm = OpenAI agents writing real code.
+    default: stub
+  datasource:
+    # File-based H2 so runs, audit trail and metrics survive restarts.
+    url: jdbc:h2:file:./data/sdlc;AUTO_SERVER=TRUE
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+sdlc:
+  retry-backoff: 500ms
+  budget:
+    max-run-duration: 60m
+    max-attempts: 40
+    max-tokens: 1500000
+  policy:
+    max-artifact-chars: 400000
+    max-files-per-change: 40
+    max-lines-per-change: 4000
+  gates:
+    min-line-coverage: 0.7
+  workspace:
+    root: ./workspace
+    target-repo: ./workspace/target/url-shortener
+    template: ./templates/spring-boot-service
+    build-timeout: 10m

@@ -1,0 +1,72 @@
+# Same graph as workflows/llm/sdlc.yaml with stub agents and no code workspace: exercises and demos the
+# orchestration (gates, parallel joins, approvals, retries, re-planning) in seconds, without an API key.
+name: sdlc-dryrun
+description: Dry run of the SDLC graph with canned agent outputs.
+nodes:
+  - id: requirements
+    agent: RequirementsAgent
+    outputs: [requirements_spec]
+    exitGates: [artifactsPresent, validJson, noOpenQuestions]
+    requiresApproval: true
+    maxRetries: 2
+  - id: plan
+    agent: PlannerAgent
+    dependsOn: [requirements]
+    outputs: [task_plan]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson, validTaskPlan]
+    maxRetries: 2
+  - id: impact_analysis
+    agent: ImpactAnalystAgent
+    dependsOn: [requirements]
+    condition: isBrownfield
+    outputs: [impact_report]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson]
+    maxRetries: 2
+  - id: design
+    agent: ArchitectAgent
+    dependsOn: [plan, impact_analysis]
+    outputs: [design_doc, api_contract]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent]
+    requiresApproval: true
+    maxRetries: 2
+  - id: implement
+    agent: ImplementerAgent
+    dependsOn: [design]
+    outputs: [change_set]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson]
+    maxRetries: 3
+    fallbackAgent: ImplementerFallbackAgent
+  - id: tests
+    agent: TestAgent
+    dependsOn: [implement]
+    outputs: [test_report]
+    exitGates: [artifactsPresent, validJson]
+    maxRetries: 2
+  - id: docs
+    agent: DocsAgent
+    dependsOn: [implement]
+    outputs: [documentation]
+    exitGates: [artifactsPresent]
+    maxRetries: 1
+  - id: security_review
+    agent: SecurityReviewAgent
+    dependsOn: [implement]
+    outputs: [security_report]
+    exitGates: [artifactsPresent, validJson, noBlockingSecurityFindings]
+  - id: review
+    agent: ReviewerAgent
+    dependsOn: [tests, docs, security_review]
+    outputs: [review_report]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson, reviewApproved]
+  - id: release_readiness
+    agent: ReleaseAgent
+    dependsOn: [review]
+    outputs: [release_notes, engineering_summary]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent]
+    requiresApproval: true

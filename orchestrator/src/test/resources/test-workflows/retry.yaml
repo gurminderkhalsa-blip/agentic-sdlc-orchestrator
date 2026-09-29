@@ -1,0 +1,8 @@
+name: retry
+nodes:
+  - id: build
+    agent: Worker
+    outputs: [build_out]
+    exitGates: [artifactsPresent, validJson]
+    maxRetries: 2
+    fallbackAgent: Backup

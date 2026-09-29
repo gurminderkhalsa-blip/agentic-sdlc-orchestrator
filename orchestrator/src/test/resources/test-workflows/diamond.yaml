@@ -1,0 +1,24 @@
+name: diamond
+description: a -> (b || c) -> d
+nodes:
+  - id: a
+    agent: Alpha
+    outputs: [a_out]
+    exitGates: [artifactsPresent, validJson]
+  - id: b
+    agent: Beta
+    dependsOn: [a]
+    outputs: [b_out]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent]
+  - id: c
+    agent: Gamma
+    dependsOn: [a]
+    outputs: [c_out]
+    exitGates: [artifactsPresent]
+  - id: d
+    agent: Delta
+    dependsOn: [b, c]
+    outputs: [d_out]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent]

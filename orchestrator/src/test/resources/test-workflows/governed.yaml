@@ -1,0 +1,21 @@
+name: governed
+nodes:
+  - id: requirements
+    agent: Spec
+    outputs: [requirements_spec]
+    exitGates: [validJson, noOpenQuestions]
+    requiresApproval: true
+    maxRetries: 1
+  - id: impact
+    agent: Impact
+    dependsOn: [requirements]
+    condition: isBrownfield
+    outputs: [impact_out]
+  - id: plan
+    agent: Planner
+    dependsOn: [requirements]
+    outputs: [plan_out]
+  - id: build
+    agent: Builder
+    dependsOn: [plan, impact]
+    outputs: [build_out]

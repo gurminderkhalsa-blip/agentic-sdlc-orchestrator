@@ -1,0 +1,52 @@
+// Orchestrator: the agentic SDLC engine (workflow DAG, gates, policies, approvals, audit, metrics).
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'tools.jackson.dataformat:jackson-dataformat-yaml'
+    implementation 'com.openai:openai-java:4.69.3'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:7.8.0.202609011348-r'
+    runtimeOnly 'com.h2database:h2'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['-parameters']
+}
+
+tasks.named('test') {
+    useJUnitPlatform { excludeTags 'slow' }
+    testLogging { events 'passed', 'failed'; exceptionFormat 'full' }
+}
+
+// Tests that run real Gradle builds of a generated project (about a minute).
+tasks.register('slowTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'slow' }
+    testLogging { events 'passed', 'failed'; exceptionFormat 'full' }
+}
+
+// Run from the repository root so ./workspace, ./data and ./scenarios resolve there.
+tasks.named('bootRun') {
+    workingDir = rootProject.projectDir
+}

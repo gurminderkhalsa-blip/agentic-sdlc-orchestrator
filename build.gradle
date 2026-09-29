@@ -1,0 +1,9 @@
+// Root build: shared settings only. Each module has its own build.gradle.
+subprojects {
+    group = 'com.agentic.sdlc'
+    version = '0.1.0'
+
+    repositories {
+        mavenCentral()
+    }
+}

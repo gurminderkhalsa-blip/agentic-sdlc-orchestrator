@@ -1,0 +1,89 @@
+# Canned agent outputs for sdlc.agents.mode=stub. They let the orchestration be demoed end to end
+# without an LLM. ${requirement} is replaced with the run's requirement text.
+agents:
+  - name: RequirementsAgent
+    outputs:
+      requirements_spec: |
+        {
+          "summary": "${requirement}",
+          "changeType": "greenfield",
+          "functional": [
+            "POST /api/links creates a short code for a valid http(s) URL",
+            "GET /{code} redirects (302) to the original URL",
+            "GET /api/links/{code}/stats returns click count"
+          ],
+          "nonFunctional": ["p95 redirect < 50 ms", "codes are 7-char base62", "invalid URLs rejected with 400"],
+          "openQuestions": [
+            {"question": "Should links expire?", "assumption": "No expiry in v1"}
+          ],
+          "acceptanceCriteria": ["Round trip create -> redirect works", "Unknown code returns 404"]
+        }
+
+  - name: PlannerAgent
+    outputs:
+      task_plan: |
+        {
+          "tasks": [
+            {"id": "T1", "title": "Link entity + repository", "dependsOn": []},
+            {"id": "T2", "title": "Base62 code generator with collision retry", "dependsOn": []},
+            {"id": "T3", "title": "Create + redirect endpoints", "dependsOn": ["T1", "T2"]},
+            {"id": "T4", "title": "Click counter + stats endpoint", "dependsOn": ["T3"]}
+          ]
+        }
+
+  - name: ImpactAnalystAgent
+    outputs:
+      impact_report: |
+        {"impactedModules": ["LinkController", "LinkService", "links table"], "risk": "medium"}
+
+  - name: ArchitectAgent
+    outputs:
+      api_contract: |
+        [{"method": "POST", "path": "/api/links"}, {"method": "GET", "path": "/{code}"}]
+      design_doc: |
+        # Design
+        - Layers: controller -> service -> repository (Spring Data JPA)
+        - Code generation: random 7-char base62, unique index, retry on collision (max 5)
+        - Redirect: 302, click count incremented asynchronously
+
+  - name: ImplementerAgent
+    # Fails once so the stub demo shows a bounded retry.
+    failFirstAttempts: 1
+    outputs:
+      change_set: |
+        {"files": ["Link.java", "LinkRepository.java", "CodeGenerator.java", "LinkService.java", "LinkController.java"]}
+
+  - name: ImplementerFallbackAgent
+    outputs:
+      change_set: |
+        {"files": ["LinkController.java"], "note": "fallback produced a minimal change"}
+
+  - name: TestAgent
+    outputs:
+      test_report: |
+        {"summary": "14 unit + 5 integration tests", "testCases": [{"name": "redirectsKnownCode", "type": "integration", "covers": ["AC1"]}]}
+
+  - name: SecurityReviewAgent
+    outputs:
+      security_report: |
+        {"summary": "no blocking issues", "findings": [{"severity": "MEDIUM", "file": "LinkController.java", "issue": "no rate limiting on create", "recommendation": "add a per-IP limit"}]}
+
+  - name: DocsAgent
+    outputs:
+      documentation: |
+        # URL Shortener
+        POST /api/links {"url": "..."} -> {"code": "...", "shortUrl": "..."}
+
+  - name: ReviewerAgent
+    outputs:
+      review_report: |
+        {"verdict": "approve", "findings": [], "risks": ["no auth on create endpoint (documented)"]}
+
+  - name: ReleaseAgent
+    outputs:
+      release_notes: |
+        # Release notes
+        Initial URL shortener: create, redirect, click stats.
+      engineering_summary: |
+        # Engineering summary (dry run)
+        Stub outputs only; see the llm profile for a real run.

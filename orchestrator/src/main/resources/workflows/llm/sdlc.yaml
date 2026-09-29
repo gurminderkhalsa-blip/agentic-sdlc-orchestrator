@@ -1,0 +1,94 @@
+# Full SDLC workflow with LLM agents working in a per-run git workspace.
+#
+#   requirements* ─┬─> plan ──────────────┐
+#                  └─> impact_analysis? ──┴─> design* ─> implement ─┬─> tests ───────────┐
+#                                                                    ├─> docs ────────────┼─> review ─> release_readiness*(publish)
+#                                                                    └─> security_review ─┘
+#   * human approval checkpoint   ? brownfield only   publish = fast-forward target main on approval
+name: sdlc
+description: Requirement to released change, with code in a git workspace and human checkpoints at spec, design and release.
+workspace: true
+nodes:
+  - id: requirements
+    agent: RequirementsAgent
+    outputs: [requirements_spec]
+    exitGates: [artifactsPresent, validJson, noOpenQuestions]
+    requiresApproval: true
+    maxRetries: 2
+
+  - id: plan
+    agent: PlannerAgent
+    dependsOn: [requirements]
+    outputs: [task_plan]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson, validTaskPlan]
+    maxRetries: 2
+
+  - id: impact_analysis
+    agent: ImpactAnalystAgent
+    dependsOn: [requirements]
+    condition: isBrownfield
+    outputs: [impact_report]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson, impactFilesExist]
+    maxRetries: 2
+
+  - id: design
+    agent: ArchitectAgent
+    dependsOn: [plan, impact_analysis]
+    outputs: [design_doc, api_contract]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent]
+    requiresApproval: true
+    maxRetries: 2
+
+  - id: implement
+    agent: ImplementerAgent
+    dependsOn: [design]
+    outputs: [change_set]
+    writes: ["src/main/**", "build.gradle"]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, compiles]
+    maxRetries: 3
+    fallbackAgent: ImplementerFallbackAgent
+    fallbackAttempts: 2
+
+  - id: tests
+    agent: TestAgent
+    dependsOn: [implement]
+    outputs: [test_report]
+    writes: ["src/test/**"]
+    exitGates: [artifactsPresent, testsPass, coverage]
+    maxRetries: 3
+
+  - id: docs
+    agent: DocsAgent
+    dependsOn: [implement]
+    outputs: [documentation]
+    writes: ["README.md", "docs/**"]
+    exitGates: [artifactsPresent]
+    maxRetries: 1
+
+  - id: security_review
+    agent: SecurityReviewAgent
+    dependsOn: [implement]
+    outputs: [security_report]
+    exitGates: [artifactsPresent, validJson, noBlockingSecurityFindings]
+    maxRetries: 1
+
+  - id: review
+    agent: ReviewerAgent
+    dependsOn: [tests, docs, security_review]
+    outputs: [review_report]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent, validJson, reviewApproved]
+    maxRetries: 1
+
+  - id: release_readiness
+    agent: ReleaseAgent
+    dependsOn: [review]
+    outputs: [release_notes, engineering_summary]
+    entryGates: [inputsAvailable]
+    exitGates: [artifactsPresent]
+    requiresApproval: true
+    publishOnApproval: true

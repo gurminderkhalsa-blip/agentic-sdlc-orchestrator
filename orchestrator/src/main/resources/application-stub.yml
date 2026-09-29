@@ -1,0 +1,6 @@
+sdlc:
+  agents:
+    mode: stub
+  workflow-locations:
+    - classpath:workflows/dryrun/*.yaml
+  default-workflow: sdlc-dryrun

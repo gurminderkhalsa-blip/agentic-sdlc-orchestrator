@@ -1,0 +1,15 @@
+name: coded
+workspace: true
+nodes:
+  - id: build
+    agent: Worker
+    outputs: [build_out]
+    writes: ["src/main/**"]
+    exitGates: [artifactsPresent]
+    maxRetries: 2
+  - id: ship
+    agent: Builder
+    dependsOn: [build]
+    outputs: [ship_out]
+    requiresApproval: true
+    publishOnApproval: true

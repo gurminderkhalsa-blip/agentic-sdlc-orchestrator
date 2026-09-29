@@ -10,3 +10,4 @@ out/
 .project
 .classpath
 .settings/
+/workspace-*/

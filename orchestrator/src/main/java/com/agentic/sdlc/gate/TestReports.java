@@ -45,11 +45,8 @@ final class TestReports {
                         problem = first(testCase, "error");
                     }
                     if (problem != null && failing.size() < 15) {
-                        String detail = problem.getTextContent().lines().limit(6)
-                                .map(line -> line.length() > 300 ? line.substring(0, 300) + " ..." : line)
-                                .reduce((a, b) -> a + "\n    " + b).orElse("");
                         failing.add(testCase.getAttribute("classname") + "." + testCase.getAttribute("name")
-                                + ": " + detail);
+                                + ": " + describe(problem.getTextContent()));
                     }
                 }
             }
@@ -57,6 +54,27 @@ final class TestReports {
             failing.add("could not read test results: " + e.getMessage());
         }
         return new TestSummary(tests, failures, errors, skipped, failing);
+    }
+
+    /**
+     * First lines of the failure plus its innermost "Caused by", which is where the real reason for
+     * wrapper errors such as "Failed to load ApplicationContext" lives.
+     */
+    static String describe(String stackTrace) {
+        List<String> lines = stackTrace.lines().toList();
+        String head = lines.stream().limit(6).map(TestReports::shorten)
+                .reduce((a, b) -> a + "\n    " + b).orElse("");
+        String rootCause = null;
+        for (String line : lines) {
+            if (line.stripLeading().startsWith("Caused by:")) {
+                rootCause = line.strip();
+            }
+        }
+        return rootCause == null ? head : head + "\n    Root cause: " + shorten(rootCause);
+    }
+
+    private static String shorten(String line) {
+        return line.length() > 400 ? line.substring(0, 400) + " ..." : line;
     }
 
     /** Line coverage ratio from the report-level LINE counter, or -1 if there is no report. */

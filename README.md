@@ -10,11 +10,10 @@ The demo target is a URL shortener service.
 
 ## Status
 
-| Day | Scope | State |
-|---|---|---|
-| 1 | Orchestration engine, gates, policies, approvals, re-planning, safe-stop, audit, metrics, stub agents | done |
-| 2 | OpenAI agents, git workspaces with checkpoints/rollback/publish, build and quality gates, change-control policies, record/replay | done (live run pending an API key) |
-| 3 | Scenario runs and recordings, approval/metrics UI, architecture doc, final summary | planned |
+All three scenarios (greenfield, brownfield, ambiguous) were run end to end and released. The greenfield
+recording replays from a fresh clone with **no API key**. Full engineering write-up — architecture,
+requirement mapping, scenario reports, incident log, testing approach, trade-offs and limitations:
+**[docs/WRITEUP.md](docs/WRITEUP.md)**.
 
 ## Requirements
 

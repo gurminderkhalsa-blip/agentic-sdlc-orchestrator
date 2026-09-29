@@ -283,7 +283,9 @@ public class NodeExecutor {
             rollbackFiles(runId, node.id(), session, attempt.getAttemptNo());
             Map<String, String> discarded = new LinkedHashMap<>(staged);
             if (!proposed.isEmpty()) {
-                discarded.put(proposalArtifact(node.id()), json.writeValueAsString(proposed));
+                Map<String, String> repairBase = new LinkedHashMap<>(previousFiles);
+                repairBase.putAll(proposed);
+                discarded.put(proposalArtifact(node.id()), json.writeValueAsString(repairBase));
             }
             artifacts.discard(runId, node.id(), stage.getId(), attempt.getId(), actor, discarded);
             finishAttempt(attempt, AttemptStatus.FAILED, failure, context.tokensUsed());

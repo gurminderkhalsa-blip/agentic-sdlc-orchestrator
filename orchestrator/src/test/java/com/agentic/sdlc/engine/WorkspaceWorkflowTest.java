@@ -99,6 +99,25 @@ class WorkspaceWorkflowTest extends EngineTestSupport {
     }
 
     @Test
+    void partialRepairAttemptsDoNotShrinkTheRepairBase() throws Exception {
+        agents.get("Worker").script(ctx -> {
+            var ws = ctx.workspace().orElseThrow();
+            if (ctx.attemptNo() == 1) {
+                ws.write("src/main/java/demo/A.java", "class A {}");
+                ws.write("src/main/java/demo/B.java", "class B {}");
+            } else {
+                ws.write("src/main/java/demo/B.java", "class B { int fixed; }");
+            }
+            return ctx.attemptNo() < 3 ? AgentResult.failed("still wrong") : ScriptedAgent.writeDefaults(ctx);
+        });
+        startAndWait("coded", Scenario.GREENFIELD);
+
+        assertThat(agents.get("Worker").calls().get(2).previousAttemptFiles())
+                .containsEntry("src/main/java/demo/A.java", "class A {}")
+                .containsEntry("src/main/java/demo/B.java", "class B { int fixed; }");
+    }
+
+    @Test
     void agentFailureRollsBackItsFiles() throws Exception {
         agents.get("Worker").script(ctx -> {
             ctx.workspace().orElseThrow().write("src/main/java/demo/Half.java", "class Half {");

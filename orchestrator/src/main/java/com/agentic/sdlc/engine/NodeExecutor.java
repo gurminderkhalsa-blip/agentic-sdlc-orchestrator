@@ -189,7 +189,11 @@ public class NodeExecutor {
                 }
                 lastFailure = Text.truncate(attempt.failure(), FEEDBACK_CHARS);
                 if (!attempt.proposedFiles().isEmpty()) {
-                    previousFiles = attempt.proposedFiles();
+                    // Merge, don't replace: an attempt that edited only some files must not make the next
+                    // attempt forget the rest of the version it is repairing.
+                    Map<String, String> merged = new LinkedHashMap<>(previousFiles);
+                    merged.putAll(attempt.proposedFiles());
+                    previousFiles = merged;
                 }
                 feedback.add(lastFailure);
             }

@@ -405,7 +405,8 @@ public class NodeExecutor {
             }
         }
         decisions.findByRunIdOrderByIdAsc(runId).stream()
-                .filter(d -> d.getActor() != null && d.getActor().startsWith("human:") && d.getTitle().startsWith("Revised"))
+                .filter(d -> d.getActor() != null && d.getActor().startsWith("human:")
+                        && (d.getTitle().startsWith("Revised") || d.getTitle().startsWith("Sent back")))
                 .forEach(d -> result.add(d.getTitle() + " by " + d.getActor() + ": " + d.getRationale()));
         return result;
     }

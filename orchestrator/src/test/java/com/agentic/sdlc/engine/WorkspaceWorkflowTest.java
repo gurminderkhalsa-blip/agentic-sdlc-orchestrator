@@ -76,6 +76,8 @@ class WorkspaceWorkflowTest extends EngineTestSupport {
                 .containsEntry("src/main/java/demo/Service.java", "class Service { String v = \"v1\"; }");
         assertThat(ws.history(10)).anySatisfy(line -> assertThat(line).contains("Revert"));
         assertThat(agents.get("Builder").calls()).hasSize(2);
+        assertThat(agents.get("Builder").calls().get(1).humanDecisions())
+                .anySatisfy(d -> assertThat(d).contains("Sent back build").contains("use v2"));
         assertThat(stageStatus(runId, "ship")).isEqualTo(StageStatus.AWAITING_APPROVAL);
         assertThat(approvals.findByRunIdOrderByIdAsc(runId)).extracting(a -> a.getStatus().name())
                 .containsExactly("CANCELLED", "PENDING");

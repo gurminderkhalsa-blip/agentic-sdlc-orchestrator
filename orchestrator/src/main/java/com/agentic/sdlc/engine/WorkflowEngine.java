@@ -217,6 +217,9 @@ public class WorkflowEngine {
             reopen(run);
             audit.record(runId, nodeId, AuditType.STAGE_MANUAL_RETRY, actor,
                     "Stage re-queued by a human" + (feedback == null ? "" : ": " + feedback));
+            if (feedback != null && !feedback.isBlank()) {
+                recordHumanDecision(run, nodeId, actor, "Sent back " + nodeId, feedback, Map.of());
+            }
             advance(runId);
             return null;
         });

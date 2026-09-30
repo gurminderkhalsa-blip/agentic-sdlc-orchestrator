@@ -10,6 +10,7 @@ Build a URL shortener HTTP service.
 - Each link records how many times it was followed; clients can fetch a link's details and click count.
 - Invalid URLs are rejected with a clear error. Codes must be unique, short (about 7 characters) and hard to guess.
 - Store links with Spring Data JPA in the H2 database already configured in the project (persistence across restarts is not required).
+- Operators can follow what the service does: key operations and errors are logged, and an audit trail in the database records link creation, rejected creations, redirects and unknown codes (time, action, code, client IP, outcome).
 
 ## Recording note
 

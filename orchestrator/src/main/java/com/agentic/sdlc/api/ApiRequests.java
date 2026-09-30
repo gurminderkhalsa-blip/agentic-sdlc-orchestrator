@@ -19,6 +19,10 @@ public final class ApiRequests {
     public record Rerun(@NotBlank String actor, String feedback) {
     }
 
+    /** @param name folder under deliverables/; defaults to the run's recording name */
+    public record Export(@Pattern(regexp = "[A-Za-z0-9._-]+") String name) {
+    }
+
     public record Decide(@NotBlank String actor, String comment) {
     }
 

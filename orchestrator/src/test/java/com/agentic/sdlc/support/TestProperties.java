@@ -20,7 +20,7 @@ public final class TestProperties {
                         1000, Duration.ofSeconds(5), null),
                 new SdlcProperties.Workspace(root.toString(), root.resolve("target/repo").toString(),
                         template.toString(), Duration.ofMinutes(5)),
-                new SdlcProperties.Gates(0.7));
+                new SdlcProperties.Gates(0.7), root.resolve("deliverables").toString());
     }
 
     public static SdlcProperties defaults() {

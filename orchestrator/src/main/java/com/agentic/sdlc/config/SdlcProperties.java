@@ -18,6 +18,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param llm               LLM provider settings (used when agents.mode=llm)
  * @param workspace         where per-run git workspaces and the target repository live
  * @param gates             thresholds used by quality gates
+ * @param deliverablesRoot  where exported SDLC deliverables are written, one folder per scenario
  */
 @ConfigurationProperties(prefix = "sdlc")
 public record SdlcProperties(
@@ -29,7 +30,8 @@ public record SdlcProperties(
         @DefaultValue("sdlc") String defaultWorkflow,
         @DefaultValue Llm llm,
         @DefaultValue Workspace workspace,
-        @DefaultValue Gates gates) {
+        @DefaultValue Gates gates,
+        @DefaultValue("./deliverables") String deliverablesRoot) {
 
     /** @param mode "stub" (canned outputs, no LLM) or "llm" (real agents, added on Day 2) */
     public record Agents(@DefaultValue("stub") String mode) {

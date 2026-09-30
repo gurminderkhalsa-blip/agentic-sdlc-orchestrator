@@ -19,6 +19,7 @@ Usage: scripts/sdlc <command> [args]
   audit <runId> [lines]                                 latest audit events
   metrics <runId> | metrics                             run metrics, or metrics across all runs
   artifact <runId> <name>                               print an artifact (e.g. engineering_summary)
+  export <runId> [name]                                 write all SDLC deliverables to deliverables/<name>/
 USAGE
 }
 
@@ -85,5 +86,11 @@ PY
     curl -sf "$URL$path" | python3 -c "$PY_METRICS" ;;
   artifact)
     curl -sf "$URL/api/runs/${1:?runId}/artifacts/${2:?name}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["content"])' ;;
+  export)
+    post "/api/runs/${1:?runId}/export" "$(json name "${2:-}")" | python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+print("Exported", len(r["files"]), "files to", r["directory"])
+for k, v in r["summary"].items(): print("  %-20s %s" % (k, v))' ;;
   *) usage; [ -z "$cmd" ] || exit 1 ;;
 esac

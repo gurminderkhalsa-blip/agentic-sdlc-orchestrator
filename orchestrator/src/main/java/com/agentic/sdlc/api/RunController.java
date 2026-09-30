@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.agentic.sdlc.audit.AuditService;
 import com.agentic.sdlc.common.NotFoundException;
 import com.agentic.sdlc.config.SdlcProperties;
+import com.agentic.sdlc.deliverables.DeliverablesExporter;
 import com.agentic.sdlc.engine.WorkflowEngine;
 import com.agentic.sdlc.metrics.RunMetrics;
 import com.agentic.sdlc.metrics.MetricsService;
@@ -48,10 +49,12 @@ public class RunController {
     private final AuditService audit;
     private final MetricsService metrics;
     private final SdlcProperties properties;
+    private final DeliverablesExporter exporter;
 
     public RunController(WorkflowEngine engine, WorkflowRunRepository runs, StageRunRepository stages,
             StageAttemptRepository attempts, ApprovalRequestRepository approvals, ArtifactRepository artifacts,
-            DecisionRepository decisions, AuditService audit, MetricsService metrics, SdlcProperties properties) {
+            DecisionRepository decisions, AuditService audit, MetricsService metrics, SdlcProperties properties,
+            DeliverablesExporter exporter) {
         this.engine = engine;
         this.runs = runs;
         this.stages = stages;
@@ -62,6 +65,7 @@ public class RunController {
         this.audit = audit;
         this.metrics = metrics;
         this.properties = properties;
+        this.exporter = exporter;
     }
 
     @PostMapping
@@ -135,6 +139,13 @@ public class RunController {
         engine.reviseArtifact(runId, name, request.content(), AuditService.humanActor(request.actor()),
                 request.reason());
         return view(runId);
+    }
+
+    /** Writes every artifact of the run into deliverables/&lt;name&gt;/ (name defaults to the recording). */
+    @PostMapping("/{runId}/export")
+    public DeliverablesExporter.ExportResult export(@PathVariable String runId,
+            @RequestBody(required = false) ApiRequests.Export request) {
+        return exporter.export(runId, request == null ? null : request.name());
     }
 
     @GetMapping("/{runId}/decisions")

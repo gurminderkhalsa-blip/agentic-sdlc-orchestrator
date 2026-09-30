@@ -158,7 +158,8 @@ public class NodeExecutor {
         audit.record(runId, nodeId, AuditType.STAGE_STARTED, AuditService.SYSTEM, "Stage started");
 
         GateVerdict entry = runGates(runId, node.entryGates(),
-                new GateContext(runId, node, inputs, name -> artifacts.readCommitted(runId, name), workspace));
+                new GateContext(runId, node, inputs, name -> artifacts.readCommitted(runId, name), workspace,
+                        run.getBaselineCommit()));
         if (entry.outcome() != GateResult.Outcome.PASS) {
             // Retrying cannot fix missing inputs, so escalate straight away.
             return fail(stage, "Entry gate failed: " + entry.message());
@@ -288,7 +289,7 @@ public class NodeExecutor {
         if (failure == null) {
             Function<String, Optional<String>> view = name -> staged.containsKey(name)
                     ? Optional.of(staged.get(name)) : artifacts.readCommitted(runId, name);
-            GateVerdict exit = runGates(runId, node.exitGates(), new GateContext(runId, node, inputs, view, workspace));
+            GateVerdict exit = runGates(runId, node.exitGates(), new GateContext(runId, node, inputs, view, workspace, run.getBaselineCommit()));
             evidence = exit.evidence();
             if (exit.outcome() == GateResult.Outcome.FAIL) {
                 failure = "Exit gate failed: " + exit.message();
@@ -327,7 +328,8 @@ public class NodeExecutor {
             approvalSummary = "Review " + node.outputs() + " before downstream stages use them";
         }
         if (session != null) {
-            String sha = session.checkpoint(node.id() + " by " + agent.name());
+            String sha = session.checkpoint(context.commitMessage()
+                    .orElse("chore(" + node.id() + "): " + node.id() + " changes by " + agent.name()));
             if (sha != null) {
                 attempt.setCheckpointCommit(sha);
                 audit.record(runId, node.id(), AuditType.CHECKPOINT, actor,

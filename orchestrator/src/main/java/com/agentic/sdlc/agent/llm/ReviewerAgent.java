@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.agentic.sdlc.agent.AgentContext;
 import com.agentic.sdlc.agent.AgentResult;
+import com.agentic.sdlc.workspace.Workspace;
 
 import tools.jackson.databind.JsonNode;
 
@@ -30,6 +31,13 @@ public class ReviewerAgent extends LlmAgent {
                 "change_set", "test_report", "tests_evidence", "security_report", "documentation")) {
             prompt.artifact(context, name);
         }
+        context.workspace().ifPresent(ws -> {
+            List<String> changed = ws.workspace().changedFilesSince(Workspace.BASELINE_REF).stream()
+                    .filter(p -> p.startsWith("src/") || p.equals("build.gradle")).toList();
+            prompt.section("Files changed by this run (review every one; list each in filesReviewed)",
+                    String.join("\n", changed));
+            prompt.files(ws, changed);
+        });
     }
 
     @Override

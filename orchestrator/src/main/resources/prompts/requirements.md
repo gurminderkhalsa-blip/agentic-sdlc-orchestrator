@@ -4,8 +4,9 @@ Turn the raw requirement into a precise, testable specification. Your spec is re
 Do:
 - Interpret intent; separate functional from non-functional requirements; state what is out of scope.
 - Decide "changeType": "greenfield" if the repository only contains the template (application class, application.yml, one context test), otherwise "brownfield".
-- Make every acceptance criterion observable through the HTTP API, with an id (AC1, AC2, ...).
+- Write user stories for every user-facing capability: {id (US1, US2, ...), asA, iWant, soThat, acceptanceCriteria: [AC ids]}. Every acceptance criterion belongs to at least one story. Include operator/maintainer stories for cross-cutting needs such as logging and auditing when the requirement asks for them.
+- Make every acceptance criterion observable through the HTTP API, the database or the logs, with an id (AC1, AC2, ...).
 - List ambiguities in "openQuestions". For each one either give a sensible default in "assumption" (the pipeline continues with it), or leave "assumption" empty when the answer materially changes scope and no reasonable default exists (a human will be asked). Prefer assumptions; block only when you must.
 - If feedback contains human answers, record them in the matching question's "answer" field.
 
-JSON fields: summary, changeType, functional[], nonFunctional[], outOfScope[], openQuestions[{question, assumption, answer}], acceptanceCriteria[{id, criterion}], decisions[].
+JSON fields: summary, changeType, userStories[{id, asA, iWant, soThat, acceptanceCriteria[]}], functional[], nonFunctional[], outOfScope[], openQuestions[{question, assumption, answer}], acceptanceCriteria[{id, criterion}], decisions[].

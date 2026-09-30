@@ -45,7 +45,9 @@ class WorkspaceWorkflowTest extends EngineTestSupport {
                 .containsKey("README.md");
         assertThat(ws.read("README.md")).hasValue("# demo\n");   // attempt 1's write was restored
         assertThat(ws.readAtHead("src/main/java/demo/Service.java")).contains("class Service { int v = 2; }");
-        assertThat(ws.history(5).get(0)).contains("[build] attempt 2");
+        assertThat(ws.history(5).get(0)).contains("chore(build): build changes by Worker");
+        assertThat(ws.commitLogSince(run(runId).getBaselineCommit())).singleElement().asString()
+                .contains("Stage: build").contains("Attempt: 2");
         assertThat(auditCount(runId, AuditType.CHECKPOINT)).isEqualTo(1);
 
         assertThat(runStatus(runId)).isEqualTo(RunStatus.AWAITING_APPROVAL);

@@ -115,6 +115,25 @@ class LlmAgentTest {
     }
 
     @Test
+    void conventionalCommitMessagesAreUsedAndWeakOnesAreDerivedFromTheSummary() {
+        WorkspaceSession session = workspaces.prepare("run-1").session("implement", 2, "agent:ImplementerAgent");
+        NodeDefinition implement = node("implement", "ImplementerAgent", List.of("change_set"));
+        ImplementerAgent agent = new ImplementerAgent(support, false);
+
+        reply.set("{\"files\": [{\"path\": \"src/main/java/A.java\", \"content\": \"class A {}\"}], "
+                + "\"summary\": \"adds A\", \"commitMessage\": \"feat(links): add link creation endpoint\\n\\nServes US1 (AC1, AC2).\"}");
+        AgentContext good = context(implement, session, List.of(), false);
+        agent.execute(good);
+        assertThat(good.commitMessage()).hasValue("feat(links): add link creation endpoint\n\nServes US1 (AC1, AC2).");
+
+        reply.set("{\"files\": [{\"path\": \"src/main/java/B.java\", \"content\": \"class B {}\"}], "
+                + "\"summary\": \"Adds the redirect controller\", \"commitMessage\": \"did stuff\"}");
+        AgentContext weak = context(implement, session, List.of(), false);
+        agent.execute(weak);
+        assertThat(weak.commitMessage().orElseThrow()).startsWith("feat: adds the redirect controller");
+    }
+
+    @Test
     void fallbackVariantUsesItsOwnPrompt() {
         WorkspaceSession session = workspaces.prepare("run-1").session("implement", 2, "agent:x");
         reply.set("{\"files\": [{\"path\": \"src/main/java/A.java\", \"content\": \"class A {}\"}]}");

@@ -115,6 +115,18 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    void checkpointCommitsCarryTheAgentMessageAndStageTrailers() {
+        Workspace ws = service.prepare("run-msg");
+        WorkspaceSession session = ws.session("implement", 3, "agent:ImplementerAgent");
+        session.write("src/main/java/demo/X.java", "class X {}");
+        session.checkpoint("feat(links): add X\n\nServes US1.");
+
+        assertThat(ws.commitLogSince(ws.headCommit() + "~1")).singleElement().asString()
+                .contains("feat(links): add X").contains("Serves US1.").contains("Stage: implement").contains("Attempt: 3");
+        assertThat(ws.history(1).get(0)).contains("feat(links): add X");
+    }
+
+    @Test
     void publishFastForwardsMainAndRefusesWhenMainMoved() {
         Workspace first = service.prepare("run-first");
         Workspace second = service.prepare("run-second");

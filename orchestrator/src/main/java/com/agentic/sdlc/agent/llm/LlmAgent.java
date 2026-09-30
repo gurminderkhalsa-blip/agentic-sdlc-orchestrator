@@ -120,6 +120,7 @@ public abstract class LlmAgent implements Agent {
      */
     protected String applyFiles(AgentContext context, JsonNode output) {
         WorkspaceSession workspace = workspace(context);
+        context.setCommitMessage(commitMessage(output));
         List<String> problems = new ArrayList<>();
         JsonNode files = output.path("files");
         if (!files.isArray() || files.isEmpty()) {
@@ -160,6 +161,26 @@ public abstract class LlmAgent implements Agent {
                 .put("lines", change.isDelete() ? 0 : change.content().lines().count()));
         changeSet.put("diff", workspace.diff());
         return pretty(changeSet);
+    }
+
+    private static final java.util.regex.Pattern CONVENTIONAL_SUBJECT = java.util.regex.Pattern.compile(
+            "^(feat|fix|test|docs|refactor|chore|perf|build)(\\([a-z0-9._-]+\\))?!?: \\S.{2,}$");
+
+    /**
+     * The agent's commit message if its subject follows Conventional Commits (subject trimmed to 72 chars);
+     * otherwise a message derived from the agent's summary, so a weak message never costs a retry.
+     */
+    String commitMessage(JsonNode output) {
+        String message = output.path("commitMessage").asString("").strip();
+        String subject = message.lines().findFirst().orElse("");
+        if (CONVENTIONAL_SUBJECT.matcher(subject).matches()) {
+            String trimmed = subject.length() > 72 ? subject.substring(0, 72) : subject;
+            return trimmed + message.substring(subject.length());
+        }
+        String summary = output.path("summary").asString("update").strip().replaceAll("\\s+", " ");
+        String type = name().startsWith("Test") ? "test" : name().startsWith("Docs") ? "docs" : "feat";
+        String derived = type + ": " + (summary.isEmpty() ? "update" : Character.toLowerCase(summary.charAt(0)) + summary.substring(1));
+        return (derived.length() > 72 ? derived.substring(0, 72) : derived) + "\n\n" + summary;
     }
 
     static String stripFences(String content) {

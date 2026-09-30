@@ -70,15 +70,19 @@ public class WorkspaceSession {
         return workspace.diff(changes().stream().map(FileChange::path).toList());
     }
 
-    /** Commits this attempt's files as "[nodeId] attempt n: summary". Returns the commit id, or null if no change. */
-    public String checkpoint(String summary) {
+    /**
+     * Commits this attempt's files. {@code message} is the agent's Conventional Commit message (subject and
+     * body); the orchestrator appends trailers that identify the stage, attempt, agent and run, which is how a
+     * stage's commits are found again for rollback. Returns the commit id, or null if nothing changed.
+     */
+    public String checkpoint(String message) {
         List<String> paths = changes().stream().map(FileChange::path).toList();
         if (paths.isEmpty()) {
             return null;
         }
-        String message = "[" + nodeId + "] attempt " + attemptNo + ": " + summary
-                + "\n\nAgent: " + author + "\nRun: " + workspace.runId();
-        return workspace.commitPaths(paths, message, author);
+        String full = message.strip() + "\n\n" + Workspace.STAGE_TRAILER + nodeId + "\nAttempt: " + attemptNo
+                + "\nAgent: " + author + "\nRun: " + workspace.runId();
+        return workspace.commitPaths(paths, full, author);
     }
 
     /** Undoes every file this attempt touched. Returns the paths restored. */

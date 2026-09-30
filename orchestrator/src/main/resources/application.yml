@@ -37,7 +37,7 @@ sdlc:
     max-files-per-change: 40
     max-lines-per-change: 4000
   gates:
-    min-line-coverage: 0.7
+    min-line-coverage: 0.9   # target is 100%; gaps are reported in the QA deliverables
   workspace:
     root: ./workspace
     target-repo: ./workspace/target/url-shortener

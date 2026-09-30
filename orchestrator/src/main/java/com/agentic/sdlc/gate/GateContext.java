@@ -12,7 +12,12 @@ import com.agentic.sdlc.workspace.Workspace;
  * over committed ones; for entry gates it sees committed artifacts only.
  */
 public record GateContext(String runId, NodeDefinition node, List<String> inputArtifacts,
-        Function<String, Optional<String>> artifactReader, Optional<Workspace> workspace) {
+        Function<String, Optional<String>> artifactReader, Optional<Workspace> workspace, String baselineCommit) {
+
+    public GateContext(String runId, NodeDefinition node, List<String> inputArtifacts,
+            Function<String, Optional<String>> artifactReader, Optional<Workspace> workspace) {
+        this(runId, node, inputArtifacts, artifactReader, workspace, null);
+    }
 
     public Optional<String> artifact(String name) {
         return artifactReader.apply(name);

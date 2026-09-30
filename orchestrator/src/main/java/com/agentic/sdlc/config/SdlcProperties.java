@@ -83,6 +83,6 @@ public record SdlcProperties(
             @DefaultValue("10m") Duration buildTimeout) {
     }
 
-    public record Gates(@DefaultValue("0.7") double minLineCoverage) {
+    public record Gates(@DefaultValue("0.9") double minLineCoverage) {
     }
 }

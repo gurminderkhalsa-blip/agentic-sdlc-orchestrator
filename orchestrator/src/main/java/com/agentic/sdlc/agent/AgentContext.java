@@ -35,6 +35,7 @@ public class AgentContext {
     private final Map<String, String> staged = new LinkedHashMap<>();
     private final List<ProposedDecision> decisions = new java.util.ArrayList<>();
     private long tokensUsed;
+    private String commitMessage;
 
     public AgentContext(String runId, String requirement, Scenario scenario, NodeDefinition node, int attemptNo,
             List<String> feedback, Function<String, Optional<String>> committedReader, BooleanSupplier stopRequested,
@@ -148,5 +149,14 @@ public class AgentContext {
 
     public long tokensUsed() {
         return tokensUsed;
+    }
+
+    /** The agent's Conventional Commit message for its workspace change, if it wrote one. */
+    public void setCommitMessage(String commitMessage) {
+        this.commitMessage = commitMessage;
+    }
+
+    public Optional<String> commitMessage() {
+        return Optional.ofNullable(commitMessage).filter(m -> !m.isBlank());
     }
 }

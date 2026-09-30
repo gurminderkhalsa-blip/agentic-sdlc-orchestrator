@@ -12,7 +12,7 @@ nodes:
   - id: requirements
     agent: RequirementsAgent
     outputs: [requirements_spec]
-    exitGates: [artifactsPresent, validJson, noOpenQuestions]
+    exitGates: [artifactsPresent, validJson, userStoriesComplete, noOpenQuestions]
     requiresApproval: true
     maxRetries: 2
 
@@ -38,7 +38,7 @@ nodes:
     dependsOn: [plan, impact_analysis]
     outputs: [design_doc, api_contract]
     entryGates: [inputsAvailable]
-    exitGates: [artifactsPresent]
+    exitGates: [artifactsPresent, designDiagrams]
     requiresApproval: true
     maxRetries: 2
 
@@ -50,7 +50,7 @@ nodes:
     entryGates: [inputsAvailable]
     # existingTestsPass: the tests already on the branch still pass, so the change is not a regression
     # and the application context still starts.
-    exitGates: [artifactsPresent, compiles, existingTestsPass]
+    exitGates: [artifactsPresent, compiles, existingTestsPass, loggingAndAuditing]
     maxRetries: 3
     fallbackAgent: ImplementerFallbackAgent
     fallbackAttempts: 2
@@ -84,7 +84,7 @@ nodes:
     dependsOn: [tests, docs, security_review]
     outputs: [review_report]
     entryGates: [inputsAvailable]
-    exitGates: [artifactsPresent, validJson, reviewApproved]
+    exitGates: [artifactsPresent, validJson, allFilesReviewed, reviewApproved]
     maxRetries: 1
 
   - id: release_readiness

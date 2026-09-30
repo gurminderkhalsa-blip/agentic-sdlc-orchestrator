@@ -50,6 +50,10 @@ public class Workspace {
     private static final Set<String> PROTECTED_FILES = Set.of("gradlew", "gradlew.bat", ".gitignore");
     private static final Set<String> HIDDEN_DIRS = Set.of(".git", "build", ".gradle", ".sdlc", "gradle", "bin", "out");
     private static final Pattern REVERTS = Pattern.compile("This reverts commit ([0-9a-f]{40})");
+    /** The target repository's main as it was when this run's workspace was cloned (the run's baseline). */
+    public static final String BASELINE_REF = "refs/remotes/origin/main";
+    /** Commit trailer naming the stage that made a checkpoint commit. */
+    public static final String STAGE_TRAILER = "Stage: ";
 
     private final String runId;
     private final String branch;
@@ -317,7 +321,7 @@ public class Workspace {
                 Matcher m = REVERTS.matcher(commit.getFullMessage());
                 if (m.find()) {
                     alreadyReverted.add(m.group(1));
-                } else if (commit.getFullMessage().startsWith("[" + nodeId + "]")) {
+                } else if (isStageCommit(commit.getFullMessage(), nodeId)) {
                     stageCommits.add(commit);
                 }
             }
@@ -327,6 +331,53 @@ public class Workspace {
             throw new UncheckedIOException(e);
         } catch (GitAPIException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    /** Matches the stage trailer, and the older "[nodeId] ..." subject format of earlier runs. */
+    static boolean isStageCommit(String message, String nodeId) {
+        return message.startsWith("[" + nodeId + "]") || message.lines().anyMatch(l -> l.equals(STAGE_TRAILER + nodeId));
+    }
+
+    /** Paths changed on this run's branch since {@code baselineCommit} (committed changes only). */
+    public List<String> changedFilesSince(String baselineCommit) {
+        gitLock.lock();
+        try (RevWalk walk = new RevWalk(git.getRepository());
+                DiffFormatter diffs = new DiffFormatter(DisabledOutputStream.INSTANCE)) {
+            diffs.setRepository(git.getRepository());
+            RevCommit base = walk.parseCommit(git.getRepository().resolve(baselineCommit));
+            RevCommit head = walk.parseCommit(git.getRepository().resolve("HEAD"));
+            List<String> paths = new ArrayList<>();
+            for (DiffEntry entry : diffs.scan(base.getTree(), head.getTree())) {
+                if (entry.getChangeType() != DiffEntry.ChangeType.DELETE) {
+                    paths.add(entry.getNewPath());
+                }
+            }
+            return paths;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } finally {
+            gitLock.unlock();
+        }
+    }
+
+    /** Full commit messages on this branch since {@code baselineCommit}, oldest first (for the deliverables). */
+    public List<String> commitLogSince(String baselineCommit) {
+        gitLock.lock();
+        try {
+            List<String> entries = new ArrayList<>();
+            ObjectId since = git.getRepository().resolve(baselineCommit);
+            for (RevCommit commit : git.log().addRange(since, git.getRepository().resolve("HEAD")).call()) {
+                entries.add(0, commit.getName().substring(0, 10) + "  " + commit.getAuthorIdent().getName() + "  "
+                        + commit.getAuthorIdent().getWhenAsInstant() + "\n" + commit.getFullMessage().strip());
+            }
+            return entries;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (GitAPIException e) {
+            throw new IllegalStateException(e);
+        } finally {
+            gitLock.unlock();
         }
     }
 

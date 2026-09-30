@@ -29,7 +29,7 @@ import com.agentic.sdlc.state.WorkflowRunRepository;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "sdlc.workspace.root=build/test-workspaces/${random.uuid}",
         "sdlc.workspace.target-repo=build/test-workspaces/${random.uuid}/target",
-        "sdlc.workspace.template=src/test/resources/test-template"
+        "sdlc.workspace.template=src/test/fixtures/test-template"
 })
 @Import(TestAgentsConfig.class)
 public abstract class EngineTestSupport {

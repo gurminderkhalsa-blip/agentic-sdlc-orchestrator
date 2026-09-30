@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Small command-line client for the orchestrator's REST API, for demos.
+#   SDLC_URL   orchestrator base URL (default http://localhost:8080)
+#   SDLC_ACTOR name recorded in the audit trail (default: your user name)
+set -euo pipefail
+URL="${SDLC_URL:-http://localhost:8080}"
+ACTOR="${SDLC_ACTOR:-$USER}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/sdlc <command> [args]
+  start <greenfield|brownfield|ambiguous> [recording]   start a run from scenarios/<name>.md
+  status <runId>                                        stages and pending approvals
+  approve <approvalId> [comment]                        approve a checkpoint
+  reject <approvalId> <comment>                         reject with feedback (the stage re-runs)
+  rerun <runId> <stage> [feedback]                      send a stage back
+  stop <runId> <reason> | resume <runId>                safe-stop / resume
+  audit <runId> [lines]                                 latest audit events
+  metrics <runId> | metrics                             run metrics, or metrics across all runs
+  artifact <runId> <name>                               print an artifact (e.g. engineering_summary)
+USAGE
+}
+
+read -r -d '' PY_STATUS <<'PY' || true
+import json, sys
+d = json.load(sys.stdin)
+r = d["run"]
+print("Run %s  [%s]  %s" % (r["id"], r["status"], r.get("stopReason") or ""))
+for s in d["stages"]:
+    print("  %-18s %-18s attempts=%s" % (s["nodeId"], s["status"], s["attemptCount"]))
+for a in d["pendingApprovals"]:
+    print("\nWAITING FOR YOU  approval %s  (%s at %s)" % (a["id"], a["reason"], a["nodeId"]))
+    print("  %s" % a["summary"])
+    print("  approve:  scripts/sdlc approve %s" % a["id"])
+PY
+
+read -r -d '' PY_AUDIT <<'PY' || true
+import json, sys
+n = int(sys.argv[1])
+for e in json.load(sys.stdin)[-n:]:
+    print("%s  %-20s %-17s %-22s %s" % (e["timestamp"][11:19], e["type"], e["nodeId"] or "-", e["actor"],
+                                         (e["message"] or "")[:90]))
+PY
+
+read -r -d '' PY_METRICS <<'PY' || true
+import json, sys
+m = json.load(sys.stdin)
+m.pop("stages", None)
+for k, v in m.items():
+    print("  %-20s %s" % (k, v))
+PY
+
+post() { curl -sf -X POST "$URL$1" -H 'Content-Type: application/json' -d "$2"; }
+json() { python3 -c 'import json,sys; print(json.dumps({k: v for k, v in zip(sys.argv[1::2], sys.argv[2::2]) if v}))' "$@"; }
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  start)
+    scenario="${1:?scenario}"; recording="${2:-$scenario}"
+    body=$(python3 - "$ROOT/scenarios/$scenario.md" "$scenario" "$recording" "$ACTOR" <<'PY'
+import json, sys, re
+text = open(sys.argv[1]).read()
+req = re.split(r"\n## ", text.split("## Requirement", 1)[1], maxsplit=1)[0].strip()
+print(json.dumps({"requirement": req, "scenario": sys.argv[2].upper(), "actor": sys.argv[4], "recording": sys.argv[3]}))
+PY
+)
+    post /api/runs "$body" | python3 -c 'import json,sys; r=json.load(sys.stdin)["run"]; print("Started run", r["id"]); print("Next:  scripts/sdlc status", r["id"])' ;;
+  status)
+    curl -sf "$URL/api/runs/${1:?runId}" | python3 -c "$PY_STATUS" ;;
+  approve)
+    post "/api/approvals/${1:?approvalId}/approve" "$(json actor "$ACTOR" comment "${2:-}")" | python3 -c 'import json,sys; a=json.load(sys.stdin); print("Approved", a["id"], "at", a["nodeId"])' ;;
+  reject)
+    post "/api/approvals/${1:?approvalId}/reject" "$(json actor "$ACTOR" comment "${2:?comment}")" | python3 -c 'import json,sys; a=json.load(sys.stdin); print("Rejected", a["id"], "at", a["nodeId"], "- the stage will re-run with your comment")' ;;
+  rerun)
+    post "/api/runs/${1:?runId}/stages/${2:?stage}/rerun" "$(json actor "$ACTOR" feedback "${3:-}")" > /dev/null && echo "Sent $2 back" ;;
+  stop)
+    post "/api/runs/${1:?runId}/stop" "$(json actor "$ACTOR" reason "${2:?reason}")" > /dev/null && echo "Stopped" ;;
+  resume)
+    post "/api/runs/${1:?runId}/resume" "$(json actor "$ACTOR")" > /dev/null && echo "Resumed" ;;
+  audit)
+    curl -sf "$URL/api/runs/${1:?runId}/audit" | python3 -c "$PY_AUDIT" "${2:-25}" ;;
+  metrics)
+    if [ -n "${1:-}" ]; then path="/api/runs/$1/metrics"; else path="/api/metrics"; fi
+    curl -sf "$URL$path" | python3 -c "$PY_METRICS" ;;
+  artifact)
+    curl -sf "$URL/api/runs/${1:?runId}/artifacts/${2:?name}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["content"])' ;;
+  *) usage; [ -z "$cmd" ] || exit 1 ;;
+esac

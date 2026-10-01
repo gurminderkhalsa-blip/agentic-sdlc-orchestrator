@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LinkService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.service</a> &gt; <span class="el_source">LinkService.java</span></div><h1>LinkService.java</h1><pre class="source lang-java linenums">package com.example.shortener.service;
+
+import com.example.shortener.api.LinkResponse;
+import com.example.shortener.domain.Link;
+import com.example.shortener.exception.CodeGenerationException;
+import com.example.shortener.exception.LinkNotFoundException;
+import com.example.shortener.repository.LinkRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Instant;
+import java.util.regex.Pattern;
+
+@Service
+public class LinkService {
+<span class="fc" id="L23">    private static final Logger log = LoggerFactory.getLogger(LinkService.class);</span>
+    private static final int MAX_ATTEMPTS = 10;
+    private static final int CODE_LENGTH = 7;
+<span class="fc" id="L26">    private static final Pattern VALID_CODE = Pattern.compile(&quot;[A-Za-z0-9_-]{7}&quot;);</span>
+
+    private final LinkRepository links;
+    private final AuditService audit;
+    private final UrlValidator validator;
+    private final ShortCodeGenerator generator;
+    private final ShortUrlBuilder urlBuilder;
+    private final TransactionTemplate creationTransaction;
+
+    public LinkService(LinkRepository links, AuditService audit, UrlValidator validator,
+                       ShortCodeGenerator generator, ShortUrlBuilder urlBuilder,
+<span class="fc" id="L37">                       PlatformTransactionManager transactionManager) {</span>
+<span class="fc" id="L38">        this.links = links;</span>
+<span class="fc" id="L39">        this.audit = audit;</span>
+<span class="fc" id="L40">        this.validator = validator;</span>
+<span class="fc" id="L41">        this.generator = generator;</span>
+<span class="fc" id="L42">        this.urlBuilder = urlBuilder;</span>
+<span class="fc" id="L43">        this.creationTransaction = new TransactionTemplate(transactionManager);</span>
+<span class="fc" id="L44">        this.creationTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);</span>
+<span class="fc" id="L45">    }</span>
+
+    public LinkResponse create(String originalUrl, HttpServletRequest request) {
+<span class="fc" id="L48">        validator.validate(originalUrl);</span>
+<span class="fc" id="L49">        Link link = null;</span>
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        for (int attempt = 0; attempt &lt; MAX_ATTEMPTS; attempt++) {</span>
+<span class="fc" id="L51">            String code = generator.generate();</span>
+            try {
+<span class="fc" id="L53">                Link candidate = creationTransaction.execute(status -&gt; {</span>
+<span class="fc" id="L54">                    Link saved = links.saveAndFlush(new Link(code, originalUrl, Instant.now()));</span>
+<span class="fc" id="L55">                    audit.record(&quot;LINK_CREATED&quot;, saved.getCode(), request.getRemoteAddr(), &quot;SUCCESS&quot;);</span>
+<span class="fc" id="L56">                    return saved;</span>
+                });
+<span class="pc bpc" id="L58" title="1 of 2 branches missed.">                if (candidate != null) {</span>
+<span class="fc" id="L59">                    link = candidate;</span>
+<span class="fc" id="L60">                    break;</span>
+                }
+<span class="fc" id="L62">            } catch (DataIntegrityViolationException ex) {</span>
+<span class="fc" id="L63">                log.warn(&quot;Code collision during LINK_CREATED attempt={}&quot;, attempt + 1);</span>
+<span class="nc" id="L64">            }</span>
+        }
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        if (link == null) {</span>
+<span class="fc" id="L67">            log.error(&quot;Short-code generation exhausted retry limit&quot;);</span>
+<span class="fc" id="L68">            throw new CodeGenerationException(&quot;Unable to create a short link&quot;);</span>
+        }
+<span class="fc" id="L70">        log.info(&quot;LINK_CREATED code={} outcome=SUCCESS&quot;, link.getCode());</span>
+<span class="fc" id="L71">        return response(link, request);</span>
+    }
+
+    private void validateCodeAndAudit(String code, HttpServletRequest request) {
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        if (!isValidCode(code)) {</span>
+<span class="fc" id="L76">            audit.recordFailure(&quot;UNKNOWN_CODE&quot;, auditCode(code), request.getRemoteAddr(), &quot;NOT_FOUND&quot;);</span>
+<span class="fc" id="L77">            log.warn(&quot;UNKNOWN_CODE outcome=NOT_FOUND invalid_code=true&quot;);</span>
+<span class="fc" id="L78">            throw new LinkNotFoundException();</span>
+        }
+<span class="fc" id="L80">    }</span>
+
+    private boolean isValidCode(String code) {
+<span class="fc bfc" id="L83" title="All 4 branches covered.">        return code != null &amp;&amp; VALID_CODE.matcher(code).matches();</span>
+    }
+
+    private String auditCode(String code) {
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        if (code == null) {</span>
+<span class="fc" id="L88">            return null;</span>
+        }
+<span class="fc" id="L90">        return code.substring(0, Math.min(CODE_LENGTH, code.length()));</span>
+    }
+
+    @Transactional
+    public LinkResponse details(String code, HttpServletRequest request) {
+<span class="fc" id="L95">        validateCodeAndAudit(code, request);</span>
+<span class="fc" id="L96">        Link link = links.findByCode(code).orElseThrow(() -&gt; missing(code, request));</span>
+<span class="fc" id="L97">        return response(link, request);</span>
+    }
+
+    @Transactional
+    public String resolve(String code, HttpServletRequest request) {
+<span class="fc" id="L102">        validateCodeAndAudit(code, request);</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">        if (links.incrementClickCount(code) != 1) {</span>
+<span class="fc" id="L104">            throw missing(code, request);</span>
+        }
+<span class="fc" id="L106">        Link link = links.findByCode(code).orElseThrow(() -&gt; missing(code, request));</span>
+<span class="fc" id="L107">        audit.record(&quot;REDIRECTED&quot;, code, request.getRemoteAddr(), &quot;REDIRECTED&quot;);</span>
+<span class="fc" id="L108">        log.info(&quot;REDIRECTED code={} outcome=REDIRECTED&quot;, code);</span>
+<span class="fc" id="L109">        return link.getOriginalUrl();</span>
+    }
+
+    private LinkNotFoundException missing(String code, HttpServletRequest request) {
+<span class="fc" id="L113">        audit.recordFailure(&quot;UNKNOWN_CODE&quot;, code, request.getRemoteAddr(), &quot;NOT_FOUND&quot;);</span>
+<span class="fc" id="L114">        log.warn(&quot;UNKNOWN_CODE code={} outcome=NOT_FOUND&quot;, code);</span>
+<span class="fc" id="L115">        return new LinkNotFoundException();</span>
+    }
+
+    private LinkResponse response(Link link, HttpServletRequest request) {
+<span class="fc" id="L119">        return new LinkResponse(link.getCode(), urlBuilder.build(link.getCode(), request),</span>
+<span class="fc" id="L120">                link.getOriginalUrl(), link.getClickCount());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

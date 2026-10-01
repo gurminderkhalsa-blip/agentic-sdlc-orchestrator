@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GlobalExceptionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.controller</a> &gt; <span class="el_source">GlobalExceptionHandler.java</span></div><h1>GlobalExceptionHandler.java</h1><pre class="source lang-java linenums">package com.example.shortener.controller;
+
+import com.example.shortener.exception.CodeGenerationException;
+import com.example.shortener.exception.InvalidUrlException;
+import com.example.shortener.exception.LinkNotFoundException;
+import com.example.shortener.service.AuditService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+<span class="fc" id="L21">    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);</span>
+    private final AuditService audit;
+
+<span class="fc" id="L24">    public GlobalExceptionHandler(AuditService audit) {</span>
+<span class="fc" id="L25">        this.audit = audit;</span>
+<span class="fc" id="L26">    }</span>
+
+    @ExceptionHandler(InvalidUrlException.class)
+    public ResponseEntity&lt;ProblemDetail&gt; invalid(InvalidUrlException ex, HttpServletRequest request) {
+<span class="fc" id="L30">        reject(request, &quot;INVALID_URL:&quot; + ex.getMessage());</span>
+<span class="fc" id="L31">        log.warn(&quot;CREATION_REJECTED outcome=INVALID_URL&quot;);</span>
+<span class="fc" id="L32">        return problem(HttpStatus.BAD_REQUEST, ex.getMessage());</span>
+    }
+
+    @ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class,
+            HttpMessageNotReadableException.class})
+    public ResponseEntity&lt;ProblemDetail&gt; badRequest(Exception ex, HttpServletRequest request) {
+<span class="fc bfc" id="L38" title="All 2 branches covered.">        String detail = ex instanceof MethodArgumentNotValidException</span>
+<span class="fc" id="L39">                ? &quot;url must not be blank&quot; : &quot;request body is invalid&quot;;</span>
+<span class="fc" id="L40">        reject(request, &quot;INVALID_REQUEST:&quot; + detail);</span>
+<span class="fc" id="L41">        log.warn(&quot;CREATION_REJECTED outcome=INVALID_REQUEST&quot;);</span>
+<span class="fc" id="L42">        return problem(HttpStatus.BAD_REQUEST, detail);</span>
+    }
+
+    @ExceptionHandler(CodeGenerationException.class)
+    public ResponseEntity&lt;ProblemDetail&gt; codeGeneration(CodeGenerationException ex) {
+<span class="fc" id="L47">        log.error(&quot;Short-code generation failed&quot;);</span>
+<span class="fc" id="L48">        return problem(HttpStatus.SERVICE_UNAVAILABLE, &quot;Unable to create a short link&quot;);</span>
+    }
+
+    @ExceptionHandler(LinkNotFoundException.class)
+    public ResponseEntity&lt;ProblemDetail&gt; notFound(LinkNotFoundException ex) {
+<span class="fc" id="L53">        return problem(HttpStatus.NOT_FOUND, ex.getMessage());</span>
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity&lt;ProblemDetail&gt; unexpected(Exception ex) {
+<span class="fc" id="L58">        log.error(&quot;Unexpected request-processing error type={}&quot;, ex.getClass().getSimpleName());</span>
+<span class="fc" id="L59">        return problem(HttpStatus.INTERNAL_SERVER_ERROR, &quot;An unexpected server error occurred&quot;);</span>
+    }
+
+    private void reject(HttpServletRequest request, String outcome) {
+<span class="fc bfc" id="L63" title="All 2 branches covered.">        if (request.getRequestURI().equals(&quot;/api/links&quot;)</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">                || request.getRequestURI().startsWith(&quot;/api/links/&quot;)) {</span>
+<span class="fc" id="L65">            audit.recordFailure(&quot;CREATION_REJECTED&quot;, null, request.getRemoteAddr(), outcome);</span>
+        }
+<span class="fc" id="L67">    }</span>
+
+    private ResponseEntity&lt;ProblemDetail&gt; problem(HttpStatus status, String detail) {
+<span class="fc" id="L70">        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);</span>
+<span class="fc" id="L71">        problem.setTitle(status.getReasonPhrase());</span>
+<span class="fc" id="L72">        return ResponseEntity.status(status).body(problem);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

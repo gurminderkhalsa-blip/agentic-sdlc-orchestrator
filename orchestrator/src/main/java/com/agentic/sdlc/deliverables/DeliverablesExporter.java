@@ -33,6 +33,8 @@ import com.agentic.sdlc.state.ArtifactStatus;
 import com.agentic.sdlc.state.AttemptStatus;
 import com.agentic.sdlc.state.AuditEvent;
 import com.agentic.sdlc.state.AuditEventRepository;
+import com.agentic.sdlc.state.Decision;
+import com.agentic.sdlc.state.DecisionRepository;
 import com.agentic.sdlc.state.StageAttempt;
 import com.agentic.sdlc.state.StageAttemptRepository;
 import com.agentic.sdlc.state.WorkflowRun;
@@ -68,6 +70,7 @@ public class DeliverablesExporter {
     private final ApprovalRequestRepository approvals;
     private final ArtifactRepository artifacts;
     private final AuditEventRepository audit;
+    private final DecisionRepository decisionsRepo;
     private final WorkspaceService workspaces;
     private final MetricsService metrics;
     private final ObjectMapper json;
@@ -75,13 +78,14 @@ public class DeliverablesExporter {
 
     public DeliverablesExporter(WorkflowRunRepository runs, StageAttemptRepository attempts,
             ApprovalRequestRepository approvals, ArtifactRepository artifacts, AuditEventRepository audit,
-            WorkspaceService workspaces, MetricsService metrics, ObjectMapper json,
+            DecisionRepository decisionsRepo, WorkspaceService workspaces, MetricsService metrics, ObjectMapper json,
             com.agentic.sdlc.config.SdlcProperties properties) {
         this.runs = runs;
         this.attempts = attempts;
         this.approvals = approvals;
         this.artifacts = artifacts;
         this.audit = audit;
+        this.decisionsRepo = decisionsRepo;
         this.workspaces = workspaces;
         this.metrics = metrics;
         this.json = json;
@@ -376,6 +380,22 @@ public class DeliverablesExporter {
             }
             rows.add(List.of(attempt.getNodeId(), String.valueOf(attempt.getAttemptNo()), foundBy,
                     firstLines(reason, 300), resolution));
+        }
+        // A human sending a finished stage back, usually with the reviewer's or security reviewer's findings.
+        for (Decision decision : decisionsRepo.findByRunIdOrderByIdAsc(runId)) {
+            if (decision.getTitle() == null || !decision.getTitle().startsWith("Sent back")) {
+                continue;
+            }
+            String resolution = all.stream()
+                    .filter(a -> a.getNodeId().equals(decision.getNodeId()) && a.getStatus() == AttemptStatus.SUCCEEDED
+                            && a.getStartedAt() != null && a.getStartedAt().isAfter(decision.getCreatedAt()))
+                    .findFirst()
+                    .map(a -> "Reworked; fixed in attempt " + a.getAttemptNo()
+                            + (a.getCheckpointCommit() == null ? "" : " (commit " + a.getCheckpointCommit().substring(0, 10) + ")")
+                            + ", then re-tested and re-reviewed")
+                    .orElse("Unresolved");
+            rows.add(List.of(decision.getNodeId(), "-", "Code/security review, sent back by " + decision.getActor(),
+                    firstLines(Optional.ofNullable(decision.getRationale()).orElse(""), 400), resolution));
         }
         for (ApprovalRequest request : decisions) {
             if (request.getStatus() != ApprovalStatus.REJECTED) {

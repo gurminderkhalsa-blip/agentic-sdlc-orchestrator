@@ -12,6 +12,7 @@ import com.agentic.sdlc.policy.rules.DangerousCodeRule;
 import com.agentic.sdlc.policy.rules.ProtectedFileRule;
 import com.agentic.sdlc.policy.rules.SchemaChangeRule;
 import com.agentic.sdlc.policy.rules.SecretScanRule;
+import com.agentic.sdlc.policy.rules.TestRemovalRule;
 import com.agentic.sdlc.policy.rules.WriteScopeRule;
 import com.agentic.sdlc.support.TestProperties;
 import com.agentic.sdlc.workspace.FileChange;
@@ -19,7 +20,7 @@ import com.agentic.sdlc.workspace.FileChange;
 class PolicyRulesTest {
 
     private final PolicyEngine engine = new PolicyEngine(List.of(new WriteScopeRule(), new ProtectedFileRule(),
-            new SchemaChangeRule(), new DangerousCodeRule(), new SecretScanRule(),
+            new SchemaChangeRule(), new DangerousCodeRule(), new SecretScanRule(), new TestRemovalRule(),
             new ChangeSizeRule(TestProperties.defaults())));
 
     private PolicyDecision evaluate(List<String> scopes, FileChange... files) {
@@ -69,6 +70,21 @@ class PolicyRulesTest {
                 .isEqualTo(PolicyVerdict.DENY);
         assertThat(evaluate(List.of("src/main/**"), created("src/main/resources/x.txt",
                 "password = \"hunter22\"")).verdict()).isEqualTo(PolicyVerdict.DENY);
+    }
+
+    @Test
+    void updatingATestIsAllowedButRemovingTestsNeedsApproval() {
+        String two = "class T { @Test void a() {} @Test void b() {} }";
+        String twoUpdated = "class T { @Test void a() { /* new behaviour */ } @Test void b() {} }";
+        String one = "class T { @Test void a() {} }";
+        List<String> scope = List.of("src/test/**");
+
+        assertThat(evaluate(scope, new FileChange("src/test/java/T.java", twoUpdated, two)).verdict())
+                .isEqualTo(PolicyVerdict.ALLOW);
+        assertThat(evaluate(scope, new FileChange("src/test/java/T.java", one, two)).verdict())
+                .isEqualTo(PolicyVerdict.REQUIRE_APPROVAL);
+        assertThat(evaluate(scope, new FileChange("src/test/java/T.java", null, two)).describe(PolicyVerdict.REQUIRE_APPROVAL))
+                .contains("file deleted");
     }
 
     @Test

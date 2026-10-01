@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PublicOriginProperties.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.config</a> &gt; <span class="el_source">PublicOriginProperties.java</span></div><h1>PublicOriginProperties.java</h1><pre class="source lang-java linenums">package com.example.shortener.config;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+@Component
+public class PublicOriginProperties {
+    private final URI origin;
+    private final String value;
+
+<span class="fc" id="L13">    public PublicOriginProperties(@Value(&quot;${app.public-origin:}&quot;) String configuredOrigin) {</span>
+<span class="fc bfc" id="L14" title="All 4 branches covered.">        if (configuredOrigin == null || configuredOrigin.isBlank()) {</span>
+<span class="fc" id="L15">            throw new IllegalStateException(&quot;app.public-origin must be configured&quot;);</span>
+        }
+        try {
+<span class="fc" id="L18">            URI parsed = new URI(configuredOrigin.replaceAll(&quot;/+\\z&quot;, &quot;&quot;));</span>
+<span class="fc bfc" id="L19" title="All 4 branches covered.">            if (!parsed.isAbsolute() || parsed.getHost() == null</span>
+<span class="fc bfc" id="L20" title="All 4 branches covered.">                    || parsed.getUserInfo() != null || parsed.getFragment() != null</span>
+<span class="fc bfc" id="L21" title="All 2 branches covered.">                    || parsed.getQuery() != null</span>
+<span class="fc bfc" id="L22" title="All 2 branches covered.">                    || !(&quot;http&quot;.equalsIgnoreCase(parsed.getScheme())</span>
+<span class="fc bfc" id="L23" title="All 2 branches covered.">                    || &quot;https&quot;.equalsIgnoreCase(parsed.getScheme()))) {</span>
+<span class="fc" id="L24">                throw new IllegalArgumentException(&quot;public origin must be an absolute HTTP or HTTPS origin&quot;);</span>
+            }
+<span class="fc" id="L26">            this.origin = parsed;</span>
+<span class="fc" id="L27">            this.value = parsed.toString();</span>
+<span class="fc" id="L28">        } catch (URISyntaxException | IllegalArgumentException ex) {</span>
+<span class="fc" id="L29">            throw new IllegalStateException(&quot;Invalid app.public-origin&quot;, ex);</span>
+<span class="fc" id="L30">        }</span>
+<span class="fc" id="L31">    }</span>
+
+    public URI uri() {
+<span class="fc" id="L34">        return origin;</span>
+    }
+
+    public String value() {
+<span class="fc" id="L38">        return value;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

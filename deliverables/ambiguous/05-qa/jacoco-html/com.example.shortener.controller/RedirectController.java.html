@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RedirectController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.controller</a> &gt; <span class="el_source">RedirectController.java</span></div><h1>RedirectController.java</h1><pre class="source lang-java linenums">package com.example.shortener.controller;
+
+import com.example.shortener.service.LinkService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class RedirectController {
+<span class="fc" id="L16">    private static final Logger log = LoggerFactory.getLogger(RedirectController.class);</span>
+    private final LinkService service;
+
+<span class="fc" id="L19">    public RedirectController(LinkService service) {</span>
+<span class="fc" id="L20">        this.service = service;</span>
+<span class="fc" id="L21">    }</span>
+
+    @GetMapping(&quot;/{code}&quot;)
+    public ResponseEntity&lt;Void&gt; redirect(@PathVariable String code, HttpServletRequest request) {
+<span class="fc" id="L25">        log.info(&quot;Processing redirect request&quot;);</span>
+<span class="fc" id="L26">        HttpHeaders headers = new HttpHeaders();</span>
+<span class="fc" id="L27">        headers.setLocation(java.net.URI.create(service.resolve(code, request)));</span>
+<span class="fc" id="L28">        return new ResponseEntity&lt;&gt;(headers, HttpStatus.FOUND);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

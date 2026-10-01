@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RedirectEvent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.domain</a> &gt; <span class="el_source">RedirectEvent.java</span></div><h1>RedirectEvent.java</h1><pre class="source lang-java linenums">package com.example.shortener.domain;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.time.LocalDate;
+
+@Entity
+@Table(name = &quot;redirect_events&quot;, indexes = {
+        @Index(name = &quot;idx_redirect_event_link_day&quot;, columnList = &quot;link_id,event_day&quot;),
+        @Index(name = &quot;idx_redirect_event_link_referrer&quot;, columnList = &quot;link_id,referrer&quot;)
+})
+public class RedirectEvent {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = &quot;link_id&quot;, nullable = false)
+    private Link link;
+
+    @Column(name = &quot;event_time&quot;, nullable = false)
+    private Instant eventTime;
+
+    @Column(name = &quot;event_day&quot;, nullable = false)
+    private LocalDate eventDay;
+
+    @Column(length = 2048)
+    private String referrer;
+
+<span class="fc" id="L39">    protected RedirectEvent() {</span>
+<span class="fc" id="L40">    }</span>
+
+<span class="fc" id="L42">    public RedirectEvent(Link link, Instant eventTime, LocalDate eventDay, String referrer) {</span>
+<span class="fc" id="L43">        this.link = link;</span>
+<span class="fc" id="L44">        this.eventTime = eventTime;</span>
+<span class="fc" id="L45">        this.eventDay = eventDay;</span>
+<span class="fc" id="L46">        this.referrer = referrer;</span>
+<span class="fc" id="L47">    }</span>
+
+<span class="nc" id="L49">    public Long getId() { return id; }</span>
+<span class="fc" id="L50">    public Link getLink() { return link; }</span>
+<span class="fc" id="L51">    public Instant getEventTime() { return eventTime; }</span>
+<span class="fc" id="L52">    public LocalDate getEventDay() { return eventDay; }</span>
+<span class="fc" id="L53">    public String getReferrer() { return referrer; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

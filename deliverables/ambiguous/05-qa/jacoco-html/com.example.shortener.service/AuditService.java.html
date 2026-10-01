@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuditService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.service</a> &gt; <span class="el_source">AuditService.java</span></div><h1>AuditService.java</h1><pre class="source lang-java linenums">package com.example.shortener.service;
+
+import com.example.shortener.domain.AuditEvent;
+import com.example.shortener.repository.AuditEventRepository;
+import java.time.Clock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AuditService {
+<span class="fc" id="L15">    private static final Logger log = LoggerFactory.getLogger(AuditService.class);</span>
+    private final AuditEventRepository repository;
+    private final Clock clock;
+
+    @Autowired
+<span class="fc" id="L20">    public AuditService(AuditEventRepository repository, Clock clock) {</span>
+<span class="fc" id="L21">        this.repository = repository;</span>
+<span class="pc bpc" id="L22" title="1 of 2 branches missed.">        this.clock = clock == null ? Clock.systemUTC() : clock;</span>
+<span class="fc" id="L23">    }</span>
+
+    public AuditService(AuditEventRepository repository) {
+<span class="fc" id="L26">        this(repository, Clock.systemUTC());</span>
+<span class="fc" id="L27">    }</span>
+
+    @Transactional
+    public void record(String action, String code, String clientIp, String outcome) {
+<span class="fc" id="L31">        save(action, code, clientIp, outcome);</span>
+<span class="fc" id="L32">    }</span>
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailure(String action, String code, String clientIp, String outcome) {
+        try {
+<span class="fc" id="L37">            save(action, code, clientIp, outcome);</span>
+<span class="nc" id="L38">        } catch (RuntimeException ex) {</span>
+<span class="nc" id="L39">            log.error(&quot;Audit persistence failed action={} error={}&quot;, action,</span>
+<span class="nc" id="L40">                    ex.getClass().getSimpleName());</span>
+<span class="fc" id="L41">        }</span>
+<span class="fc" id="L42">    }</span>
+
+    private void save(String action, String code, String clientIp, String outcome) {
+<span class="fc" id="L45">        repository.save(new AuditEvent(clock.instant(), action, code,</span>
+<span class="pc bpc" id="L46" title="1 of 4 branches missed.">                clientIp == null || clientIp.isBlank() ? &quot;unknown&quot; : clientIp, outcome));</span>
+<span class="fc" id="L47">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

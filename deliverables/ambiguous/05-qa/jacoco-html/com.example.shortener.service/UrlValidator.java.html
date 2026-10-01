@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UrlValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.service</a> &gt; <span class="el_source">UrlValidator.java</span></div><h1>UrlValidator.java</h1><pre class="source lang-java linenums">package com.example.shortener.service;
+
+import com.example.shortener.config.PublicOriginProperties;
+import com.example.shortener.exception.InvalidUrlException;
+import java.net.IDN;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+@Component
+public class UrlValidator {
+<span class="fc" id="L15">    private static final Logger log = LoggerFactory.getLogger(UrlValidator.class);</span>
+    private static final int MAX_URL_LENGTH = 2048;
+    private static final String SHORT_CODE_PATH = &quot;/[A-Za-z0-9_-]{7}&quot;;
+    private final URI publicOrigin;
+
+<span class="fc" id="L20">    public UrlValidator(PublicOriginProperties properties) {</span>
+<span class="fc" id="L21">        this.publicOrigin = properties.uri();</span>
+<span class="fc" id="L22">    }</span>
+
+<span class="fc" id="L24">    public UrlValidator() {</span>
+<span class="fc" id="L25">        this.publicOrigin = URI.create(&quot;http://localhost:8080&quot;);</span>
+<span class="fc" id="L26">    }</span>
+
+    public void validate(String value) {
+<span class="fc bfc" id="L29" title="All 4 branches covered.">        if (value == null || value.isBlank()) {</span>
+<span class="nc" id="L30">            reject(&quot;INVALID_URL&quot;);</span>
+        }
+<span class="fc bfc" id="L32" title="All 2 branches covered.">        if (value.length() &gt; MAX_URL_LENGTH) {</span>
+<span class="nc" id="L33">            reject(&quot;URL_TOO_LONG&quot;);</span>
+        }
+        try {
+<span class="fc" id="L36">            URI uri = new URI(value);</span>
+<span class="fc bfc" id="L37" title="All 4 branches covered.">            if (!uri.isAbsolute() || uri.getHost() == null</span>
+<span class="fc bfc" id="L38" title="All 2 branches covered.">                    || !(&quot;http&quot;.equalsIgnoreCase(uri.getScheme())</span>
+<span class="fc bfc" id="L39" title="All 2 branches covered.">                    || &quot;https&quot;.equalsIgnoreCase(uri.getScheme()))) {</span>
+<span class="nc" id="L40">                reject(&quot;INVALID_URL&quot;);</span>
+            }
+<span class="pc bpc" id="L42" title="1 of 4 branches missed.">            if (sameOrigin(uri, publicOrigin) &amp;&amp; isRedirectPath(uri.getPath())) {</span>
+<span class="nc" id="L43">                reject(&quot;SELF_LINK&quot;);</span>
+            }
+<span class="fc" id="L45">        } catch (URISyntaxException | IllegalArgumentException ex) {</span>
+<span class="nc" id="L46">            reject(&quot;INVALID_URL&quot;);</span>
+<span class="fc" id="L47">        }</span>
+<span class="fc" id="L48">    }</span>
+
+    private boolean sameOrigin(URI first, URI second) {
+<span class="fc bfc" id="L51" title="All 2 branches covered.">        return first.getScheme().equalsIgnoreCase(second.getScheme())</span>
+<span class="fc bfc" id="L52" title="All 2 branches covered.">                &amp;&amp; canonicalHost(first.getHost()).equals(canonicalHost(second.getHost()))</span>
+<span class="pc bpc" id="L53" title="1 of 2 branches missed.">                &amp;&amp; effectivePort(first) == effectivePort(second);</span>
+    }
+
+    private String canonicalHost(String host) {
+<span class="fc" id="L57">        String withoutTrailingDots = host.replaceAll(&quot;\\.+\\z&quot;, &quot;&quot;);</span>
+<span class="fc" id="L58">        return IDN.toASCII(withoutTrailingDots).toLowerCase(Locale.ROOT);</span>
+    }
+
+    private int effectivePort(URI uri) {
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        return uri.getPort() &gt;= 0 ? uri.getPort()</span>
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">                : (&quot;https&quot;.equalsIgnoreCase(uri.getScheme()) ? 443 : 80);</span>
+    }
+
+    private boolean isRedirectPath(String path) {
+<span class="fc" id="L67">        String configuredPath = publicOrigin.getPath();</span>
+<span class="fc bfc" id="L68" title="All 2 branches covered.">        String base = configuredPath == null || configuredPath.isBlank()</span>
+<span class="pc bpc" id="L69" title="2 of 4 branches missed.">                || &quot;/&quot;.equals(configuredPath)</span>
+<span class="fc" id="L70">                ? &quot;&quot;</span>
+<span class="fc" id="L71">                : &quot;/&quot; + configuredPath.replaceAll(&quot;^/+|/+$&quot;, &quot;&quot;);</span>
+<span class="pc bpc" id="L72" title="2 of 4 branches missed.">        String target = path == null || path.isEmpty() ? &quot;&quot; : path;</span>
+
+<span class="fc bfc" id="L74" title="All 2 branches covered.">        if (base.isEmpty()) {</span>
+<span class="pc bpc" id="L75" title="2 of 6 branches missed.">            return target.isEmpty() || &quot;/&quot;.equals(target) || target.matches(SHORT_CODE_PATH);</span>
+        }
+<span class="pc bpc" id="L77" title="2 of 4 branches missed.">        if (target.equals(base) || target.equals(base + &quot;/&quot;)) {</span>
+<span class="nc" id="L78">            return true;</span>
+        }
+<span class="pc bpc" id="L80" title="1 of 2 branches missed.">        return target.startsWith(base + &quot;/&quot;)</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">                &amp;&amp; target.substring(base.length()).matches(SHORT_CODE_PATH);</span>
+    }
+
+    private void reject(String reason) {
+<span class="fc" id="L85">        log.warn(&quot;CREATION_REJECTED outcome={}&quot;, reason);</span>
+<span class="fc" id="L86">        throw new InvalidUrlException(&quot;url must be an absolute HTTP or HTTPS URL&quot;, reason);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

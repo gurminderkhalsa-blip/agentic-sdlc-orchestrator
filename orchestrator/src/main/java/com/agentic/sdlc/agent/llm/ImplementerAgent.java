@@ -40,7 +40,7 @@ public class ImplementerAgent extends LlmAgent {
         prompt.artifact(context, "requirements_spec").artifact(context, "task_plan").artifact(context, "impact_report")
                 .artifact(context, "design_doc").artifact(context, "api_contract");
         var ws = workspace(context);
-        prompt.fileListing(ws).files(ws, List.of("src/main/", "build.gradle"));
+        prompt.fileListing(ws).files(ws, List.of("src/main/", "build.gradle", "src/test/"));
     }
 
     @Override

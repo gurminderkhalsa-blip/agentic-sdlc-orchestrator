@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LinkService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.service</a> &gt; <span class="el_source">LinkService.java</span></div><h1>LinkService.java</h1><pre class="source lang-java linenums">package com.example.shortener.service;
+
+import com.example.shortener.api.LinkResponse;
+import com.example.shortener.domain.Link;
+import com.example.shortener.domain.RedirectEvent;
+import com.example.shortener.exception.CodeGenerationException;
+import com.example.shortener.exception.InvalidUrlException;
+import com.example.shortener.exception.LinkNotFoundException;
+import com.example.shortener.repository.LinkRepository;
+import com.example.shortener.repository.RedirectEventRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@Service
+public class LinkService {
+<span class="fc" id="L28">    private static final Logger log = LoggerFactory.getLogger(LinkService.class);</span>
+    private static final int MAX_ATTEMPTS = 10;
+    private static final int MAX_REFERRER_LENGTH = 2048;
+<span class="fc" id="L31">    private static final Pattern VALID_CODE = Pattern.compile(&quot;[A-Za-z0-9_-]{7}&quot;);</span>
+    private static final String CREATION_AUDITED = &quot;shortener.creation.audited&quot;;
+
+    private final LinkRepository links;
+    private final AuditService audit;
+    private final UrlValidator validator;
+    private final ShortCodeGenerator generator;
+    private final ShortUrlBuilder urlBuilder;
+    private final RedirectEventRepository events;
+    private final ZoneId zone;
+    private final TransactionTemplate creationTransaction;
+
+    @Autowired
+    public LinkService(LinkRepository links, AuditService audit, UrlValidator validator,
+                       ShortCodeGenerator generator, ShortUrlBuilder urlBuilder,
+                       RedirectEventRepository events, PlatformTransactionManager manager,
+<span class="fc" id="L47">                       @Value(&quot;${app.time-zone:UTC}&quot;) String timeZone) {</span>
+<span class="fc" id="L48">        this.links = links;</span>
+<span class="fc" id="L49">        this.audit = audit;</span>
+<span class="fc" id="L50">        this.validator = validator;</span>
+<span class="fc" id="L51">        this.generator = generator;</span>
+<span class="fc" id="L52">        this.urlBuilder = urlBuilder;</span>
+<span class="fc" id="L53">        this.events = events;</span>
+<span class="fc" id="L54">        this.zone = configuredZone(timeZone);</span>
+<span class="fc" id="L55">        this.creationTransaction = new TransactionTemplate(manager);</span>
+<span class="fc" id="L56">        this.creationTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);</span>
+<span class="fc" id="L57">    }</span>
+
+    public LinkService(LinkRepository links, AuditService audit, UrlValidator validator,
+                       ShortCodeGenerator generator, ShortUrlBuilder urlBuilder,
+                       PlatformTransactionManager manager) {
+<span class="nc" id="L62">        this(links, audit, validator, generator, urlBuilder, null, manager, &quot;UTC&quot;);</span>
+<span class="nc" id="L63">    }</span>
+
+    public LinkResponse create(String originalUrl, HttpServletRequest request) {
+        try {
+<span class="fc" id="L67">            validator.validate(originalUrl);</span>
+<span class="fc" id="L68">        } catch (InvalidUrlException ex) {</span>
+<span class="fc" id="L69">            audit.recordFailure(&quot;CREATION_REJECTED&quot;, null, remoteAddress(request), ex.getReason());</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">            if (request != null) {</span>
+<span class="fc" id="L71">                request.setAttribute(CREATION_AUDITED, Boolean.TRUE);</span>
+            }
+<span class="fc" id="L73">            log.warn(&quot;CREATION_REJECTED outcome={}&quot;, ex.getReason());</span>
+<span class="fc" id="L74">            throw ex;</span>
+<span class="fc" id="L75">        }</span>
+
+<span class="fc bfc" id="L77" title="All 2 branches covered.">        for (int attempt = 0; attempt &lt; MAX_ATTEMPTS; attempt++) {</span>
+<span class="fc" id="L78">            String code = generator.generate();</span>
+            try {
+<span class="fc" id="L80">                Link link = creationTransaction.execute(status -&gt; {</span>
+<span class="fc" id="L81">                    Link saved = links.saveAndFlush(new Link(code, originalUrl, Instant.now()));</span>
+<span class="fc" id="L82">                    audit.record(&quot;LINK_CREATED&quot;, saved.getCode(), remoteAddress(request), &quot;SUCCESS&quot;);</span>
+<span class="fc" id="L83">                    return saved;</span>
+                });
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">                if (link != null) {</span>
+<span class="fc" id="L86">                    log.info(&quot;LINK_CREATED code={} outcome=SUCCESS&quot;, link.getCode());</span>
+<span class="fc" id="L87">                    return response(link, request);</span>
+                }
+<span class="fc" id="L89">            } catch (DataIntegrityViolationException ex) {</span>
+<span class="fc" id="L90">                log.warn(&quot;Code collision during LINK_CREATED attempt={}&quot;, attempt + 1);</span>
+<span class="nc" id="L91">            }</span>
+        }
+<span class="fc" id="L93">        log.error(&quot;Short-code generation exhausted retry limit&quot;);</span>
+<span class="fc" id="L94">        throw new CodeGenerationException(&quot;Unable to create a short link&quot;);</span>
+    }
+
+    @Transactional
+    public String resolve(String code, HttpServletRequest request) {
+<span class="fc" id="L99">        validateCode(code, request);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        if (links.incrementClickCount(code) != 1) {</span>
+<span class="fc" id="L101">            throw missing(code, request);</span>
+        }
+<span class="fc" id="L103">        Link link = links.findByCode(code).orElseThrow(() -&gt; missing(code, request));</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if (events != null) {</span>
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">            String referrer = request == null ? null : request.getHeader(&quot;Referer&quot;);</span>
+<span class="fc bfc" id="L106" title="All 2 branches covered.">            if (referrer != null) {</span>
+<span class="fc" id="L107">                referrer = referrer.substring(0, Math.min(MAX_REFERRER_LENGTH, referrer.length()));</span>
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">                if (referrer.isBlank()) {</span>
+<span class="nc" id="L109">                    referrer = null;</span>
+                }
+            }
+<span class="fc" id="L112">            Instant now = Instant.now();</span>
+<span class="fc" id="L113">            events.save(new RedirectEvent(link, now, now.atZone(zone).toLocalDate(), referrer));</span>
+        }
+<span class="fc" id="L115">        audit.record(&quot;REDIRECTED&quot;, code, remoteAddress(request), &quot;REDIRECTED&quot;);</span>
+<span class="fc" id="L116">        log.info(&quot;REDIRECTED code={} outcome=REDIRECTED&quot;, code);</span>
+<span class="fc" id="L117">        return link.getOriginalUrl();</span>
+    }
+
+    @Transactional
+    public LinkResponse details(String code, HttpServletRequest request) {
+<span class="fc" id="L122">        validateCode(code, request);</span>
+<span class="fc" id="L123">        return response(links.findByCode(code).orElseThrow(() -&gt; missing(code, request)), request);</span>
+    }
+
+    private void validateCode(String code, HttpServletRequest request) {
+<span class="fc bfc" id="L127" title="All 4 branches covered.">        if (code == null || !VALID_CODE.matcher(code).matches()) {</span>
+<span class="fc" id="L128">            throw missing(code, request);</span>
+        }
+<span class="fc" id="L130">    }</span>
+
+    private LinkNotFoundException missing(String code, HttpServletRequest request) {
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        String safeCode = code == null ? null : code.substring(0, Math.min(7, code.length()));</span>
+<span class="fc" id="L134">        audit.recordFailure(&quot;UNKNOWN_CODE&quot;, safeCode, remoteAddress(request), &quot;NOT_FOUND&quot;);</span>
+<span class="fc" id="L135">        log.warn(&quot;UNKNOWN_CODE code={} outcome=NOT_FOUND&quot;, safeCode);</span>
+<span class="fc" id="L136">        return new LinkNotFoundException();</span>
+    }
+
+    private LinkResponse response(Link link, HttpServletRequest request) {
+<span class="fc" id="L140">        return new LinkResponse(link.getCode(), urlBuilder.build(link.getCode(), request),</span>
+<span class="fc" id="L141">                link.getOriginalUrl(), link.getClickCount());</span>
+    }
+
+    private String remoteAddress(HttpServletRequest request) {
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">        return request == null ? null : request.getRemoteAddr();</span>
+    }
+
+    private ZoneId configuredZone(String timeZone) {
+<span class="pc bpc" id="L149" title="1 of 4 branches missed.">        return ZoneId.of(timeZone == null || timeZone.isBlank() ? &quot;UTC&quot; : timeZone);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

@@ -1,0 +1,127 @@
+{
+  "summary" : "Enhance the existing URL shortener with redirect analytics, self-link and destination-length validation, and logging/auditing for the new behaviors while preserving existing endpoint behavior.",
+  "changeType" : "brownfield",
+  "userStories" : [ {
+    "id" : "US1",
+    "asA" : "link owner",
+    "iWant" : "redirects to record their timestamp and referring URL",
+    "soThat" : "I can review how and when my short link is used",
+    "acceptanceCriteria" : [ "AC1", "AC2", "AC3" ]
+  }, {
+    "id" : "US2",
+    "asA" : "link owner",
+    "iWant" : "to retrieve analytics for one short link",
+    "soThat" : "I can understand its traffic volume, recent daily activity, and leading referrers",
+    "acceptanceCriteria" : [ "AC4", "AC5", "AC6", "AC7", "AC8" ]
+  }, {
+    "id" : "US3",
+    "asA" : "link creator",
+    "iWant" : "self-referential destination URLs to be rejected",
+    "soThat" : "creating a short link cannot create a redirect loop",
+    "acceptanceCriteria" : [ "AC9", "AC10", "AC11" ]
+  }, {
+    "id" : "US4",
+    "asA" : "link creator",
+    "iWant" : "destination URLs longer than 2048 characters to be rejected using the existing invalid-URL behavior",
+    "soThat" : "oversized destinations are not stored or redirected",
+    "acceptanceCriteria" : [ "AC12", "AC13" ]
+  }, {
+    "id" : "US5",
+    "asA" : "operator",
+    "iWant" : "analytics requests and rejected link-creation attempts to be logged and audited",
+    "soThat" : "new behavior is traceable for operations and compliance",
+    "acceptanceCriteria" : [ "AC14", "AC15", "AC16", "AC17" ]
+  }, {
+    "id" : "US6",
+    "asA" : "consumer of the existing API",
+    "iWant" : "existing endpoints and response formats to remain unchanged",
+    "soThat" : "existing integrations continue to work",
+    "acceptanceCriteria" : [ "AC18", "AC19" ]
+  } ],
+  "functional" : [ "Record one redirect event for each successful short-link redirect, including the event timestamp and the HTTP Referer header value when present.", "Persist redirect events in the database with a relationship to the redirected link.", "Provide GET /api/links/{code}/analytics for analytics belonging to the link identified by code.", "Analytics must include total clicks for the link, daily click counts for each day in the last 30 days, and the five most frequent non-empty referrers ordered by descending count.", "Analytics queries must perform counting, date-bounded grouping, ordering, and limiting in the database rather than loading all redirect events into application memory.", "Use the configured public origin from app.public-origin when determining whether a destination points to the shortener itself.", "If app.public-origin is not configured, determine the public origin from server-side application configuration only; never derive it from the incoming request Host header.", "Reject destinations that point to the configured public origin, including links whose path targets the shortener's own redirect route.", "Reject destination URLs whose character length exceeds 2048 using the existing invalid-URL error response and status behavior.", "Audit and log analytics requests, rejected self-links, and rejected over-long destinations.", "Preserve all existing endpoint routes, successful response bodies, error response contracts, and redirect behavior except where the new validation requirements intentionally reject a request." ],
+  "nonFunctional" : [ "Analytics operations must remain database-backed and bounded: the top-referrer query must apply a database limit of five, and the daily query must apply a date range.", "Public-origin comparison must be normalized consistently for scheme, host, port, and URL parsing, while not treating an unrelated origin as self-referential.", "Redirect event timestamps must use a server-defined timezone and a consistent persisted time representation.", "Logging and audit records must contain enough contextual information to identify the operation and outcome without exposing credentials or secrets.", "The analytics endpoint must return the existing not-found behavior when the supplied short code does not identify a link.", "The implementation must use configuration or environment variables for any deployment-specific origin values and must not introduce hard-coded credentials or secrets." ],
+  "outOfScope" : [ "Authentication, authorization, rate limiting, or tenant isolation for the analytics endpoint.", "Analytics filtering by arbitrary date ranges, user agents, IP addresses, geographic location, or device type.", "Changing the existing public API response formats or error messages for cases not covered by the new validation rules.", "Backfilling redirect analytics for redirects that occurred before the new redirect-event persistence is deployed.", "Changing the short-code generation algorithm or destination URL canonicalization beyond what is required for validation.", "Deleting, aggregating, or archiving historical redirect events." ],
+  "openQuestions" : [ {
+    "question" : "What exact JSON shape should GET /api/links/{code}/analytics return?",
+    "assumption" : "Return an object containing totalClicks, clicksPerDay, and topReferrers. clicksPerDay is an array of 30 date/count objects, including zero-count days; topReferrers is an array of referrer/count objects.",
+    "answer" : ""
+  }, {
+    "question" : "What does 'last 30 days' mean at the boundaries?",
+    "assumption" : "Use the server's configured timezone and include the current calendar day plus the preceding 29 calendar days. The database range is inclusive of the start instant and exclusive of the next day after the current day.",
+    "answer" : ""
+  }, {
+    "question" : "How should redirects without a Referer header be represented in analytics?",
+    "assumption" : "Persist a null or empty value as no referrer and exclude it from topReferrers; such redirects still contribute to totalClicks and clicksPerDay.",
+    "answer" : ""
+  }, {
+    "question" : "How should public-origin fallback be configured when app.public-origin is absent?",
+    "assumption" : "Construct the fallback from server-side configuration such as configured scheme, bind address/public host, and port, with deployment configuration responsible for supplying a usable public host. The incoming Host header is never used.",
+    "answer" : ""
+  }, {
+    "question" : "Should self-link detection reject only exact public-origin URLs or any URL whose host resolves to the shortener?",
+    "assumption" : "Reject URLs with the configured public origin, including equivalent normalized scheme/host/port representations; DNS resolution and network-based alias detection are out of scope.",
+    "answer" : ""
+  }, {
+    "question" : "What audit detail is required for rejected URLs?",
+    "assumption" : "Record the event type, outcome, timestamp, reason, and safe request/link context; do not record credentials or secrets. The destination may be recorded according to the existing audit trail's current handling of URL data.",
+    "answer" : ""
+  } ],
+  "acceptanceCriteria" : [ {
+    "id" : "AC1",
+    "criterion" : "When a valid short-link redirect succeeds, exactly one persisted redirect event is associated with that link and contains a timestamp."
+  }, {
+    "id" : "AC2",
+    "criterion" : "When a redirect request includes a Referer header, the persisted redirect event contains its value; when it does not, the event contains the configured no-referrer representation."
+  }, {
+    "id" : "AC3",
+    "criterion" : "A redirect event is persisted as part of the redirect operation such that a successful redirect cannot return a success response while silently omitting its event, subject to the application's existing transaction/error semantics."
+  }, {
+    "id" : "AC4",
+    "criterion" : "GET /api/links/{code}/analytics for an existing code returns HTTP 200 with totalClicks equal to the database count of redirect events for that link."
+  }, {
+    "id" : "AC5",
+    "criterion" : "The analytics response contains exactly 30 calendar-day buckets covering the configured last-30-day window, with each bucket containing its date and click count, including zero-count days."
+  }, {
+    "id" : "AC6",
+    "criterion" : "Daily click counts equal database counts grouped by calendar day within the defined 30-day date range; events outside that range are excluded from the daily buckets."
+  }, {
+    "id" : "AC7",
+    "criterion" : "The analytics response contains no more than five top-referrer entries, ordered by descending click count, with deterministic tie ordering, and excludes missing or blank referrers."
+  }, {
+    "id" : "AC8",
+    "criterion" : "The implementation's analytics data access performs total counting, date-bounded grouping, and top-referrer ordering/limit in database queries; it does not load all redirect events for a link into application memory."
+  }, {
+    "id" : "AC9",
+    "criterion" : "A destination whose normalized origin matches the configured app.public-origin and targets the shortener's own URL space is rejected during link creation before a Link is persisted."
+  }, {
+    "id" : "AC10",
+    "criterion" : "When app.public-origin is absent, self-link detection uses only the server's configured origin values and produces the same result independently of the incoming request Host header."
+  }, {
+    "id" : "AC11",
+    "criterion" : "A self-link creation attempt returns the existing invalid-URL error response and no short link is created."
+  }, {
+    "id" : "AC12",
+    "criterion" : "A destination with more than 2048 characters is rejected during link creation before persistence."
+  }, {
+    "id" : "AC13",
+    "criterion" : "An over-long destination returns the existing invalid-URL error response and no short link is created."
+  }, {
+    "id" : "AC14",
+    "criterion" : "Each analytics request produces an application log entry identifying the analytics operation, requested code, outcome, and request timestamp without credentials or secrets."
+  }, {
+    "id" : "AC15",
+    "criterion" : "Each analytics request produces an audit event identifying the operation, requested code, timestamp, and outcome, including not-found or error outcomes according to the existing audit model."
+  }, {
+    "id" : "AC16",
+    "criterion" : "Each rejected self-link attempt produces an application log entry and an audit event identifying self-link rejection and its outcome."
+  }, {
+    "id" : "AC17",
+    "criterion" : "Each rejected over-long destination attempt produces an application log entry and an audit event identifying length rejection and its outcome."
+  }, {
+    "id" : "AC18",
+    "criterion" : "Existing successful create-link, redirect, and any other pre-existing endpoint tests continue to receive the same routes, status codes, and response body structures."
+  }, {
+    "id" : "AC19",
+    "criterion" : "Existing invalid-URL cases not introduced by these requirements continue to receive the same error response contract, and the new self-link and over-length cases use that same contract."
+  } ]
+}

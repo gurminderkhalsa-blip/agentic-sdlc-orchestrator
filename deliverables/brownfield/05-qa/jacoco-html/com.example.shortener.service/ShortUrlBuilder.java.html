@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShortUrlBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">url-shortener</a> &gt; <a href="index.source.html" class="el_package">com.example.shortener.service</a> &gt; <span class="el_source">ShortUrlBuilder.java</span></div><h1>ShortUrlBuilder.java</h1><pre class="source lang-java linenums">package com.example.shortener.service;
+
+import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ShortUrlBuilder {
+    private final String origin;
+    private final String configuredPath;
+    private final boolean legacyRequestOrigin;
+
+    public ShortUrlBuilder() {
+<span class="fc" id="L15">        this(&quot;http://localhost:8080&quot;);</span>
+<span class="fc" id="L16">    }</span>
+
+<span class="fc" id="L18">    public ShortUrlBuilder(@Value(&quot;${app.public-origin:http://localhost:8080}&quot;) String baseUrl) {</span>
+<span class="pc bpc" id="L19" title="1 of 4 branches missed.">        this.legacyRequestOrigin = baseUrl != null &amp;&amp; baseUrl.isEmpty();</span>
+
+<span class="pc bpc" id="L21" title="1 of 6 branches missed.">        if (baseUrl != null &amp;&amp; !baseUrl.isEmpty() &amp;&amp; Character.isWhitespace(baseUrl.charAt(baseUrl.length() - 1))) {</span>
+<span class="fc" id="L22">            this.origin = baseUrl;</span>
+<span class="fc" id="L23">            this.configuredPath = &quot;&quot;;</span>
+<span class="fc" id="L24">            return;</span>
+        }
+
+<span class="pc bpc" id="L27" title="1 of 4 branches missed.">        String configured = baseUrl == null || baseUrl.isBlank()</span>
+<span class="fc" id="L28">                ? &quot;http://localhost:8080&quot; : stripTrailingSlashes(baseUrl);</span>
+        URI uri;
+        try {
+<span class="fc" id="L31">            uri = URI.create(configured);</span>
+<span class="nc" id="L32">        } catch (IllegalArgumentException ex) {</span>
+<span class="nc" id="L33">            uri = URI.create(&quot;http://localhost:8080&quot;);</span>
+<span class="fc" id="L34">        }</span>
+<span class="pc bpc" id="L35" title="1 of 2 branches missed.">        String scheme = uri.getScheme() == null ? &quot;http&quot; : uri.getScheme();</span>
+<span class="pc bpc" id="L36" title="1 of 2 branches missed.">        String authority = uri.getRawAuthority() == null ? &quot;localhost:8080&quot; : uri.getRawAuthority();</span>
+<span class="fc" id="L37">        this.origin = scheme + &quot;://&quot; + authority;</span>
+<span class="fc" id="L38">        this.configuredPath = normalizePath(uri.getPath());</span>
+<span class="fc" id="L39">    }</span>
+
+    public String build(String code, HttpServletRequest request) {
+<span class="pc bpc" id="L42" title="1 of 4 branches missed.">        if (legacyRequestOrigin &amp;&amp; request != null) {</span>
+<span class="fc" id="L43">            String scheme = request.getScheme();</span>
+<span class="fc" id="L44">            String host = request.getServerName();</span>
+<span class="fc" id="L45">            int port = request.getServerPort();</span>
+<span class="fc" id="L46">            String path = configuredPath;</span>
+<span class="pc bpc" id="L47" title="1 of 2 branches missed.">            if (path.isEmpty()) {</span>
+<span class="fc" id="L48">                path = normalizePath(request.getContextPath());</span>
+            }
+<span class="fc" id="L50">            return scheme + &quot;://&quot; + host + portSuffix(scheme, port) + path + &quot;/&quot; + code;</span>
+        }
+<span class="fc" id="L52">        return origin + configuredPath + &quot;/&quot; + code;</span>
+    }
+
+    private String portSuffix(String scheme, int port) {
+<span class="fc bfc" id="L56" title="All 4 branches covered.">        boolean defaultPort = (&quot;http&quot;.equalsIgnoreCase(scheme) &amp;&amp; port == 80)</span>
+<span class="pc bpc" id="L57" title="1 of 4 branches missed.">                || (&quot;https&quot;.equalsIgnoreCase(scheme) &amp;&amp; port == 443);</span>
+<span class="pc bpc" id="L58" title="1 of 4 branches missed.">        return port &lt;= 0 || defaultPort ? &quot;&quot; : &quot;:&quot; + port;</span>
+    }
+
+    private String normalizePath(String path) {
+<span class="pc bpc" id="L62" title="2 of 6 branches missed.">        if (path == null || path.isBlank() || path.equals(&quot;/&quot;)) {</span>
+<span class="fc" id="L63">            return &quot;&quot;;</span>
+        }
+<span class="fc" id="L65">        return &quot;/&quot; + path.replaceAll(&quot;^/+|/+$&quot;, &quot;&quot;);</span>
+    }
+
+    private String stripTrailingSlashes(String value) {
+<span class="fc" id="L69">        String stripped = value.replaceAll(&quot;/+\\z&quot;, &quot;&quot;);</span>
+<span class="pc bpc" id="L70" title="1 of 2 branches missed.">        return stripped.isEmpty() ? value : stripped;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

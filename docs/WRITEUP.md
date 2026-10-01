@@ -8,6 +8,10 @@ across three scenarios: greenfield, brownfield and ambiguous.
 **Principle:** agents execute inside defined autonomy boundaries; humans own the approvals and the final
 quality decision. Every boundary is enforced in code, not in a prompt.
 
+**Where to look:**
+- All SDLC artifacts, per scenario and per agent: [`deliverables/`](../deliverables/README.md)
+- The generated service and its agent-written commit history: https://github.com/gurminderkhalsa-blip/url-shortener (private)
+
 ---
 
 ## 1. What it is, in five sentences
@@ -67,8 +71,9 @@ quality decision. Every boundary is enforced in code, not in a prompt.
 | Agents (10) | One job each; build a prompt from upstream artifacts, binding human decisions, repair base and feedback; one model call; parse JSON; apply | `agent/llm/*`, `resources/prompts/*.md` |
 | LLM clients | Live OpenAI (JSON mode), record (live + save), replay (saved answers by stage and attempt) | `llm/*` |
 | Workspace | Per-run git clone and branch; sandboxed file access; per-attempt sessions; checkpoint commits; scoped revert; fast-forward publish | `workspace/*` |
-| Gates (13) | Entry/exit checks, including real builds: `compiles`, `existingTestsPass`, `testsPass`, `coverage`, `acceptanceCriteriaCovered`, `validTaskPlan`, `impactFilesExist`, `noBlockingSecurityFindings`, `reviewApproved`, … | `gate/*` |
-| Policies (7) | Run before any build: `writeScope`, `protectedFile`, `schemaChange`, `dangerousCode`, `changeSize`, `secretScan`, `artifactSize` | `policy/rules/*` |
+| Gates (17) | Entry/exit checks, including real builds and artifact checks: `userStoriesComplete`, `designDiagrams`, `compiles`, `existingTestsPass`, `loggingAndAuditing`, `testsPass`, `coverage`, `acceptanceCriteriaCovered`, `allFilesReviewed`, `validTaskPlan`, `impactFilesExist`, `noBlockingSecurityFindings`, `reviewApproved`, … | `gate/*` |
+| Policies (8) | Run before any build: `writeScope`, `protectedFile`, `schemaChange`, `testRemoval`, `dangerousCode`, `changeSize`, `secretScan`, `artifactSize` | `policy/rules/*` |
+| Deliverables exporter | Writes every artifact of a run into `deliverables/<scenario>/`, one folder per agent, with QA figures from a fresh build | `deliverables/*` |
 | Audit and metrics | Append-only audit events (DB + JSON log); success rate, retries, rollbacks, MTTR, latency | `audit/*`, `metrics/*` |
 
 ---
@@ -77,7 +82,12 @@ quality decision. Every boundary is enforced in code, not in a prompt.
 
 | Requirement | Implementation | Evidence |
 |---|---|---|
-| Requirement understanding | Requirements agent normalises intent into a spec with functional/non-functional requirements, out-of-scope, open questions (assumed or blocking) and testable acceptance criteria | Ambiguous run: narrow reading corrected at the spec checkpoint |
+| Requirement understanding | Requirements agent normalises intent into a spec with **user stories**, functional/non-functional requirements, out-of-scope, open questions (assumed or blocking) and testable acceptance criteria; `userStoriesComplete` gate | Ambiguous run: scope set at the spec checkpoint |
+| Design documents and diagrams | Architect agent writes the design with Mermaid component, sequence and data-model diagrams, plus the API contract; `designDiagrams` gate | `deliverables/*/02-design/` |
+| Error handling, logging, auditing | Implementer must log through SLF4J in every controller/service and keep an application audit trail; `loggingAndAuditing` gate; requirements carry operator stories for both | `deliverables/*/03-development/logging-audit-error-handling.md` |
+| Meaningful commits | Each accepted attempt is a commit with the agent's Conventional Commit message and Stage/Attempt/Agent/Run trailers | url-shortener repository (34 commits) |
+| Code review of all code, issues and resolutions | Reviewer sees every changed file and must list each (`allFilesReviewed` gate); the exporter builds an issue log from every failed attempt, rejection and send-back with its resolution | `deliverables/*/04-code-review/` |
+| Unit + functional coverage, 100% target, gaps | 100% target, 90% hard floor, every acceptance criterion mapped to a passing test; JaCoCo report, functional coverage matrix, and a coverage-gaps report of every uncovered line | `deliverables/*/05-qa/` |
 | Task decomposition | Planner produces tasks with dependencies; `validTaskPlan` gate rejects cycles, unknown dependencies, single-task plans | Task plans in every run |
 | Codebase reasoning (brownfield) | Impact analyst reads the real repository; `impactFilesExist` gate rejects invented paths | Brownfield: 8 and ambiguous: 15 existing files verified |
 | Dependency graph with entry/exit gates | YAML DAG; engine starts a stage only when all dependencies are SUCCEEDED/SKIPPED; gates at both boundaries | `SchedulingTest`, `WorkflowLoaderTest` |
@@ -97,40 +107,48 @@ quality decision. Every boundary is enforced in code, not in a prompt.
 
 ## 4. The three scenarios
 
-| | Greenfield (clean recording) | Brownfield | Ambiguous |
+Final, artifact-complete runs (all deliverables in [`deliverables/`](../deliverables/README.md)):
+
+| | Greenfield | Brownfield | Ambiguous |
 |---|---|---|---|
-| Requirement | Build a URL shortener: create, redirect, click count, validation | Add click analytics; reject self-links (redirect loops); 2048-char limit | "Make the short links safer and more reliable for our users." |
-| Result | Released: 15 classes, 22 tests, 94.1% coverage | Released: 39 tests, 88.5% coverage, 10/10 criteria | Released: 56 tests, 89.5% coverage, 12/12 criteria |
-| Attempts / retries | 11 / 2 | 54 / 44 | 19 / 9 |
-| Human checkpoints (rejected) | 4 (0) | 16 (3) | 6 (1) |
-| Tokens | 129k | 1.06M | 389k |
-| Replayable without a key | **Yes** (verified from a fresh clone) | Evidence only | Evidence only |
+| Requirement | URL shortener with logging and an audit trail | Click analytics; reject self-links; 2048-char limit | "Make the short links safer and more reliable for our users." |
+| User stories / acceptance criteria | 6 / 18 | 6 / 19 | 5 / 15 |
+| Tests / functional coverage | 29 / 18 of 18 | 40 / 19 of 19 | 54 / 15 of 15 |
+| Line / branch coverage (target 100%) | 94.7% / 86.2% | 92.1% / 68.7% | 93.7% / 81.3% |
+| Files reviewed | 24 of 24 | 17 of 17 | 18 of 18 |
+| Issues found / resolved | 12 / 12 | 20 / 20 | 18 / 18 |
+| Attempts / human checkpoints | 31 / 6 | 32 / 7 | 29 / 7 |
+| Tokens | 695k | 952k | 954k |
 
 ### Greenfield
-The spec, plan and design passed first time; the test stage needed two retries; review and security passed.
-The first greenfield run (kept as `greenfield-v1.json`) is where the stale-test-results and
-repair-mode problems were found. A second attempt at a clean recording (`greenfield-v2-aborted.json`)
-exposed a model that repeated the same wrong Spring Boot 3 import four times, which led to known-fix hints
-and the circuit breaker. The third recording is the demo.
+All artifact gates passed first time (6 stories, 4 diagrams, logging and audit, 24 files reviewed). The reviewer
+then blocked on real defects: audit writes silently swallowed, no URL length limit, an unvalidated code path,
+500 instead of the documented 503. Two reworks followed, and the second exposed a subtle interaction: making the
+audit write join the request's transaction meant **failure events were rolled back with the failed request** —
+the reviewer flagged it, an end-to-end probe confirmed zero audit rows after a 404, and the final rule became
+"success events share the action's transaction; failure events get their own".
 
 ### Brownfield
-Impact analysis found every affected file in the real code. Checkpoint decisions made by the human:
-analytics path under `/api`; public origin from configuration, never from the `Host` header (a conscious
-deviation from the spec, approved at design); two HIGH security findings sent back (URL length, in-memory
-aggregation); `Referer` truncation ordered; `Host`-header short URL and trailing-dot hosts accepted as risks
-and deferred. The tests then exposed two real production defects the agents had introduced: day grouping in
-the host's time zone instead of UTC, and `day` used as an SQL alias (an H2 reserved word) — the second one
-hidden at first by a test agent that mocked the repository. The first brownfield run was stopped after an
-orchestrator bug (see incident 4) and kept as a record.
+Impact analysis worked from the real code. The run exposed an orchestrator deadlock: the requirement
+intentionally changed audited behaviour, existing greenfield unit tests asserted the old internals, the
+regression gate required them to pass unchanged, and implementation was not allowed to touch tests. The fix lets
+implementation update affected tests, guarded by the new `testRemoval` policy. Security then caught an
+oversized `Referer` header able to break redirects; a host-header behaviour from greenfield was re-accepted as a
+deferred risk; the reviewer's last MEDIUM was recorded as a follow-up.
 
 ### Ambiguous
-The requirements agent read "safer" narrowly (URL syntax and error handling). The human set the scope at the
-spec checkpoint: configured public origin for short URLs, host canonicalisation, rate limiting (30/min/IP,
-429), link expiry (90 days, 410), no URL scanning — which also closed the risks deferred from brownfield.
-Two clarifications were added in an approval comment and became binding for all later agents (client IP =
-remote address, never `X-Forwarded-For`; legacy links never expire). The **schema-change policy** fired for
-the new `expires_at` column. The tests caught one spec violation (lenient number parsing); one rework fixed
-it and every later stage passed first time.
+The agent read "safer" differently from the previous run (it proposed private-network blocking and idempotency
+keys). The human set the scope at the spec checkpoint and added two binding clarifications. The tests then found
+two real defects (self-links to short-code paths not rejected when the public origin has an empty path; lenient
+number parsing). One failing test briefly disappeared between test attempts, and a later failure turned out to be
+caused by an imprecise human instruction ("default-port variants"), corrected with a tests-only re-run. The
+reviewer's final finding was a conflict between the agent's wording of AC3 and the human's approved scope,
+resolved by a recorded human decision.
+
+### Earlier runs
+The first set of runs (recordings `greenfield-v1`, `brownfield-incident`, `brownfield-v1`, `ambiguous-v1`,
+`greenfield-v2-aborted`, `greenfield-v3`) produced the orchestrator fixes in the incident log; they are kept as
+evidence.
 
 ---
 
@@ -154,6 +172,13 @@ Every incident below was found by a real run, fixed, and covered by a regression
 | 12 | A test agent mocked the repository in integration tests, hiding an SQL error behind green tests | End-to-end probe returned 500 | Mocks forbidden in `@SpringBootTest`; 500 is a defect; send-back feedback is binding |
 | 13 | A model repeated the same wrong import four times | Identical failures in the attempt log | Known-fix hints in build feedback; circuit breaker after 3 identical failures |
 
+| 14 | Intended behaviour changes deadlocked the regression gate: implementation could not update the tests that asserted the old behaviour | Brownfield implementation failed 12 attempts | Implementation may update affected tests; `testRemoval` policy requires approval for removing tests |
+| 15 | Implementation was asked to update tests it could not see (only `src/main` in its prompt) | Same stuck failure after the policy change | Test sources added to the implementer's context |
+| 16 | In repair mode the test agent listed only its new test cases, so the coverage gate saw most criteria as uncovered | Gate evidence: 13 criteria "uncovered" at once | Prompt: always return the complete test case list |
+| 17 | The issue log missed review-driven send-backs, the most important review evidence | Deliverables review | Send-backs (with the findings) and their resolving attempt added to the issue log |
+| 18 | Two correct-sounding fixes combined into a new bug (failure audits rolled back with the failed request) | Reviewer finding, confirmed by a direct database probe | Explicit audit transaction rule; tests must check audit rows after 4xx responses |
+| 19 | An imprecise human instruction ("default-port variants") became binding and made a test assert the wrong thing | Probe showed the implementation was right | Corrected with a tests-only re-run; lesson: governance feedback must be precise |
+
 The pattern behind most of these: **an agent will satisfy the check it is given, not the intent behind it.**
 Each fix makes a check measure the intent more directly — real builds instead of claims, criteria mapped to
 real test methods, the previous version restored instead of described.
@@ -162,15 +187,16 @@ real test methods, the previous version restored instead of described.
 
 ## 6. Testing approach
 
-- **Orchestrator: 61 fast tests** (no network, no builds; ~10 s) covering the loader, scheduling and
+- **Orchestrator: 71 fast tests** (no network, no builds; ~10 s) covering the loader, scheduling and
   parallelism, retries/fallback/circuit breaker, approvals, re-planning, safe-stop and budgets, policies,
   workspace git operations (checkpoint, restore, scoped revert, publish), record/replay, agents with a fake
   LLM, and a full dry-run of the SDLC graph through the REST API.
 - **Slow test** (`./gradlew :orchestrator:slowTest`, ~20 s): real Gradle builds of the service template to
   prove the compile, test, coverage and regression gates report correctly (including stale results).
 - **Generated service:** the gates *are* its test strategy — it must compile, keep existing tests green,
-  pass its own tests with ≥ 70% line coverage, cover every acceptance criterion with a real test, and use
-  the real database in integration tests. Each release was also rebuilt independently from `main`.
+  pass its own tests with ≥ 90% line coverage (target 100%, gaps itemised), cover every acceptance criterion
+  with a real test, and use the real database in integration tests. The exporter rebuilds every release from
+  scratch to produce the published reports, and key behaviours were also checked with direct end-to-end probes.
 - **Replay:** the greenfield recording is replayed from a fresh clone with no API key; builds and tests run
   for real, only the model's text is canned. Result matched the recording exactly.
 
@@ -191,42 +217,62 @@ real test methods, the previous version restored instead of described.
 
 ---
 
-## 8. Limitations
+## 8. AI mindset — how AI was used, and how it was governed
+
+- **AI as the workforce, humans as the accountable owners.** Ten agents do all of the SDLC work; a human approves
+  the spec, the design, policy-flagged changes and every release, and can reject, send back or stop at any point.
+- **Never trust, always verify.** No agent output is accepted on its word: real builds, tests, coverage, criterion
+  ↔ test mapping, file-by-file review coverage and policy checks decide. When agents were wrong, the evidence was
+  in the audit trail; when the checks were wrong, the fix went into the checks (the 19 incidents).
+- **AI optimises for the check, not the intent.** The single most important lesson: an agent mocked a database,
+  dropped a failing test, or narrowed a requirement when that satisfied the check it was given. Each check was
+  rewritten to measure the intent directly.
+- **Human decisions are part of the system.** Approval comments and send-back feedback become binding context for
+  every later agent — and an imprecise human instruction can mislead an agent just as a bad prompt can.
+- **AI-assisted engineering of the orchestrator itself.** The orchestrator was built with an AI coding assistant
+  (Claude Code), under the same discipline: every change tested, reviewed by running it against real scenarios,
+  committed with explanations, and fixed in the open when the runs exposed a flaw.
+- **Cost awareness.** Every run is bounded by time, attempt and token budgets; budget stops are safe and resumable.
+
+## 9. Limitations
 
 - Generated code is built on the host (scrubbed environment, workspace-only directory, timeouts, and the
   dangerous-code policy first). Production use needs a container sandbox.
 - Humans are identified by an `actor` field; there is no authentication or role-based approval.
 - Single orchestrator instance; the run lock and stop signals are in memory.
 - Publishing refuses if `main` moved; there is no automatic rebase.
-- Only the greenfield recording replays cleanly; brownfield and ambiguous are kept as evidence.
-- Open follow-ups in the generated service: parsed-host validation alongside IDN support, eviction for the
-  rate limiter's per-IP buckets, a maximum request-body size, validation at the service boundary.
+- Recordings replay by stage and attempt, so a replay must repeat the same human actions (approvals, rejections,
+  send-backs) and needs the same orchestrator version; the final runs include send-backs.
+- Open follow-ups in the generated service (recorded in the review reports): rate-limiter eviction, a maximum
+  request-body size, removing an unreachable request-host fallback, alerting on failed failure-audit writes,
+  alphabet validation before logging analytics codes; branch coverage below the 100% target in all three
+  scenarios (itemised in each `coverage-gaps.md`).
 - Token cost was high while the orchestrator was being hardened (brownfield 1.06M); after the fixes the
   clean greenfield run used 129k.
 
 ---
 
-## 9. Setup and demo
+## 10. Setup and demo
 
 Requirements: Java 21. For live runs, `OPENAI_API_KEY` in the environment (never in a file).
 
 ```bash
-./gradlew :orchestrator:test                       # 61 fast tests
+./gradlew :orchestrator:test                       # 71 fast tests
+./gradlew :orchestrator:slowTest                   # real Gradle builds of the service template
 ./gradlew :orchestrator:bootRun                    # dry run with stub agents, no key
 SDLC_LLM_MODE=replay ./gradlew :orchestrator:bootRun --args='--spring.profiles.active=llm'   # replay, no key
+SDLC_LLM_MODE=record ./gradlew :orchestrator:bootRun --args='--spring.profiles.active=llm'   # live, records answers
 ```
 
-Replay the greenfield scenario (approve each checkpoint when the run pauses):
+Drive a run with the demo CLI (`SDLC_URL` points at the orchestrator):
 
 ```bash
-curl -s -X POST localhost:8080/api/runs -H 'Content-Type: application/json' -d @- <<'EOF'
-{"requirement": "<requirement text from scenarios/greenfield.md>", "scenario": "GREENFIELD",
- "actor": "reviewer", "recording": "greenfield"}
-EOF
-curl -s localhost:8080/api/approvals                                        # pending checkpoints
-curl -s -X POST localhost:8080/api/approvals/<id>/approve -H 'Content-Type: application/json' -d '{"actor":"reviewer"}'
-curl -s localhost:8080/api/runs/<runId>/metrics
-curl -s localhost:8080/api/runs/<runId>/artifacts/engineering_summary
+scripts/sdlc start greenfield            # prints the run id
+scripts/sdlc status <runId>              # stages, and the approval waiting for you
+scripts/sdlc approve <approvalId>        # or: reject <approvalId> "<feedback>" / rerun <runId> <stage> "<feedback>"
+scripts/sdlc audit <runId> 30            # audit trail
+scripts/sdlc metrics <runId>             # reliability metrics
+scripts/sdlc export <runId> greenfield   # write all SDLC deliverables to deliverables/greenfield/
 ```
 
 The generated service ends up in `workspace/target/url-shortener` (`main`); each run's history is in
@@ -234,12 +280,12 @@ The generated service ends up in `workspace/target/url-shortener` (`main`); each
 
 ---
 
-## 10. Numbers across all runs
+## 11. Numbers across all runs
 
 | Metric | Value |
 |---|---|
-| Runs | 6 (4 succeeded, 1 stopped by the human after incident 4, 1 abandoned after incident 13) |
-| Stage executions passing on the first attempt | 84.9% |
-| Attempts / rollbacks | 125 / 123 — every failed attempt was undone; nothing unapproved reached `main` |
-| Human checkpoints | 38 across runs |
-| Orchestrator code | ~150 source files, 22 test classes (61 fast tests + 1 slow), 14 prompt files |
+| Runs | 9: 7 succeeded, 1 stopped by the human after incident 4, 1 abandoned after incident 13 |
+| Stage executions passing on the first attempt | 84.1% |
+| Attempts / rollbacks | 217 / 227 — every failed attempt was undone; nothing unapproved reached `main` |
+| Human checkpoints | 58 across runs |
+| Orchestrator code | ~158 source files, 23 test classes (71 fast tests + 1 slow), 14 prompt files, 17 gates, 8 policies, 10 agents |

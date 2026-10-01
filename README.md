@@ -10,9 +10,12 @@ The demo target is a URL shortener service.
 
 ## Status
 
-All three scenarios (greenfield, brownfield, ambiguous) were run end to end and released. The greenfield
-recording replays from a fresh clone with **no API key**. Full engineering write-up — architecture,
-requirement mapping, scenario reports, incident log, testing approach, trade-offs and limitations:
+All three scenarios (greenfield, brownfield, ambiguous) were run end to end and released, and
+replay mode runs without an API key. Every SDLC artifact (user stories, design and diagrams, commit
+history, code review with issue resolutions, test and coverage reports, coverage gaps) is in
+**[deliverables/](deliverables/README.md)**; the generated service with its agent-written commit history is in
+https://github.com/gurminderkhalsa-blip/url-shortener (private). Full engineering write-up — architecture,
+requirement mapping, scenario reports, incident log, AI mindset, testing approach, trade-offs and limitations:
 **[docs/WRITEUP.md](docs/WRITEUP.md)**.
 
 ## Requirements
@@ -23,7 +26,7 @@ requirement mapping, scenario reports, incident log, testing approach, trade-off
 ## Run
 
 ```bash
-./gradlew :orchestrator:test          # fast suite (no network, no builds)
+./gradlew :orchestrator:test          # fast suite: 71 tests (no network, no builds)
 ./gradlew :orchestrator:slowTest      # real Gradle builds of the service template (~20s)
 ```
 
